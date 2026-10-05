@@ -1,6 +1,8 @@
 // Cloudflare Workers はここで書いた `app` を受け取って、リクエストを処理する。
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
+import { parse } from "yaml";
+import openapiYml from "../openapi.yml";
 import { createDb } from "./db/client";
 import { users } from "./routes/users";
 import { friends } from "./routes/friends";
@@ -59,9 +61,40 @@ app.route("/", workoutRecords);
 app.route("/", misc);
 
 // 仕様書(JSON)。/doc で取得できます。
-app.doc("/doc", {
-  openapi: "3.0.0",
-  info: { title: "Fitness App API", version: "1.0.0" },
+// コードから生成した仕様（未実装のスタブ）に、openapi.yml で固めた定義を上書きして返します。
+// ymlのパスは servers の /api/v1 からの相対なので、ここで /api/v1 を付けて揃えます。
+const API_PREFIX = "/api/v1";
+const yml = parse(openapiYml) as {
+  paths: Record<string, unknown>;
+  components?: Record<string, Record<string, unknown>>;
+  tags?: unknown[];
+  security?: unknown[];
+};
+
+app.get("/doc", (c) => {
+  const generated = app.getOpenAPIDocument({
+    openapi: "3.0.0",
+    info: { title: "Fitness App API", version: "1.0.0" },
+  });
+
+  // ymlで定義したパスは、スタブ側の同じパスを置き換える
+  const paths: Record<string, unknown> = { ...generated.paths };
+  for (const [path, item] of Object.entries(yml.paths)) {
+    paths[API_PREFIX + path] = item;
+  }
+
+  const components: Record<string, Record<string, unknown>> = { ...generated.components };
+  for (const [kind, defs] of Object.entries(yml.components ?? {})) {
+    components[kind] = { ...components[kind], ...defs };
+  }
+
+  return c.json({
+    ...generated,
+    paths,
+    components,
+    tags: [...(yml.tags ?? []), ...(generated.tags ?? [])],
+    security: yml.security,
+  });
 });
 
 // Swagger UI。ブラウザで /ui を開くと仕様書を見たり試したりできます。

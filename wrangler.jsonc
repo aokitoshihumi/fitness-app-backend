@@ -3,6 +3,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "my-app",
 	"main": "src/index.ts",
+	// openapi.yml を文字列としてimportできるようにする
+	"rules": [{ "type": "Text", "globs": ["**/*.yml"], "fallthrough": true }],
 	// Workersの動作バージョンの基準日（むやみに変えない）
 	"compatibility_date": "2026-10-04",
 	// データベースの設定
