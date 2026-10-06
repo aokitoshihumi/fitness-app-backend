@@ -10,6 +10,7 @@ import { gyms } from "./routes/gyms";
 import { provocations } from "./routes/provocations";
 import { workoutRecords } from "./routes/workout-records";
 import { misc } from "./routes/misc";
+import { trainingCalendar } from "./routes/training-calendar";
 
 type Bindings = {
   fitness_app_dev: D1Database;
@@ -59,6 +60,9 @@ app.route("/", gyms);
 app.route("/", provocations);
 app.route("/", workoutRecords);
 app.route("/", misc);
+
+// 実装済みのエンドポイント
+app.route("/", trainingCalendar);
 
 // 仕様書(JSON)。/doc で取得できます。
 // コードから生成した仕様（未実装のスタブ）に、openapi.yml で固めた定義を上書きして返します。
