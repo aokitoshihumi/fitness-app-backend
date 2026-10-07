@@ -1,0 +1,816 @@
+openapi: 3.0.3
+
+info:
+  title: 筋トレアプリ API
+  version: 0.1.0
+  description: |
+    筋トレ記録とユーザー間の競争で継続を促すモバイルアプリのバックエンドAPI。
+
+    ## 共通ルール
+    - JSONの項目名はスネークケース。
+    - 日時はすべてUTCのISO 8601形式（例: `2026-10-05T04:00:00Z`）。
+    - ユーザーIDはサーバーが発行するULID（26文字）。Firebase UIDは外部に出さない。
+    - 認証はFirebase AuthのIDトークンを `Authorization: Bearer <IDトークン>` で送る。
+      「誰からのリクエストか」はトークンからサーバーが判断するため、
+      リクエストに自分のユーザーIDを含めることはない。
+    - 定義されていない項目をリクエストに含めた場合は400を返す。
+
+    ## エラー
+    エラー時は全API共通で `Error` の形を返す。アプリは `error.code` で判定し、
+    `error.message` は開発者向けの説明として扱う。
+
+servers:
+  - url: http://localhost:8787/api/v1
+    description: ローカル開発
+  - url: https://api.example.com/api/v1
+    description: 本番（仮）
+
+tags:
+  - name: users
+    description: ユーザー登録・プロフィール
+  - name: training_calendar
+    description: 月間カレンダー表示用のトレーニング履歴
+
+security:
+  - firebaseAuth: []
+
+paths:
+  /users/me:
+    put:
+      tags: [users]
+      operationId: registerMe
+      summary: 初回登録（冪等）
+      description: |
+        Firebaseユーザーに対応するユーザーを作成する。
+
+        - ユーザが未登録なら作成してstatus:201を返す。
+        - 登録済みなら**何も変更せず**既存ユーザーをstatus:200で返す（上書きせず既存のものを）。
+        - 同じリクエストを何度送っても結果は同じ。
+        - handleはサーバーが `user_` + ランダム英数字8文字で自動生成する
+          （例: `user_7k2m9xqa`）。初回のusers/meへのリクエストでは、ユーザはhandleを指定することはできない。
+        - timezoneはデフォで `Asia/Tokyo` になる。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+            examples:
+              minimum:
+                summary: 必須項目のみ
+                value:
+                  display_name: たろう
+              full:
+                summary: 任意項目も指定
+                value:
+                  display_name: たろう
+                  bio: ベンチ100kgが目標
+                  timezone: Asia/Tokyo
+                  privacy:
+                    workout_visibility: friends
+                    show_active_status: true
+      responses:
+        "201":
+          description: 新規に作成した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              example:
+                id: 01J9X8K2ZQ4M7N3P5R6S8T0VWX
+                handle: user_7k2m9xqa
+                display_name: たろう
+                bio: null
+                avatar_url: null
+                timezone: Asia/Tokyo
+                privacy:
+                  workout_visibility: friends
+                  show_active_status: true
+                created_at: "2026-10-05T04:00:00Z"
+                updated_at: "2026-10-05T04:00:00Z"
+        "200":
+          description: 登録済みだった（変更なしで既存ユーザーを返す）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      tags: [users]
+      operationId: getMe
+      summary: 自分のプロフィール
+      description: |
+        ログイン中のユーザー自身の情報を返す。
+
+        アプリ起動時にまずこれを呼び、404（`USER_NOT_REGISTERED`）なら登録画面へ、
+        200ならホームへ進む想定。
+      responses:
+        "200":
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/UserNotRegistered"
+
+    patch:
+      tags: [users]
+      operationId: updateMe
+      summary: プロフィール・公開設定の更新
+      description: |
+        送った項目だけを更新する部分更新（JSON Merge Patch / RFC 7396 の考え方に従う）。
+
+        - 項目を**送らない** = 変更しない。
+        - `null` を送る = 値を消す（`bio` のみ可能）。
+        - `privacy` は中の項目単位で更新する（送らなかった中の項目はそのまま）。
+        - 空のボディ `{}`、未定義の項目、変更不可の項目（`id` など）は400。
+
+        ### handleの変更ルール
+        - 3〜20文字、英小文字・数字・`_` のみ。
+        - `user_` で始まるもの、予約語（`admin` など）は不可 → 400（reason: `HANDLE_RESERVED`）。
+        - 他人が使用中 → 409（`HANDLE_TAKEN`）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+            examples:
+              displayName:
+                summary: 表示名だけ変更
+                value:
+                  display_name: たろう💪
+              handle:
+                summary: handleを設定
+                value:
+                  handle: taro_lifts
+              privacy:
+                summary: アクティブ状態を非公開に
+                value:
+                  privacy:
+                    show_active_status: false
+              clearBio:
+                summary: 自己紹介を消す
+                value:
+                  bio: null
+      responses:
+        "200":
+          description: 更新成功（更新後のユーザーを返す）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/UserNotRegistered"
+        "409":
+          $ref: "#/components/responses/HandleTaken"
+
+    delete:
+      tags: [users]
+      operationId: deleteMe
+      summary: 退会
+      description: |
+        ログイン中のユーザーを退会させる。
+
+        - 個人を特定できる情報（handle・display_name・bio・アイコン）を削除し、
+          他ユーザーの画面では「退会したユーザー」として表示される（匿名化・論理削除）。
+        - handleは解放され、他のユーザーが使えるようになる。
+        - サーバーがFirebase Authのアカウントも削除する。
+        - 退会後はIDトークンが無効になるため、再送すると401になる。
+          **退会リクエスト後の401は「退会完了」とみなしてよい。**
+        - 退会の確認ダイアログ等はアプリ側のUIで行う。
+      responses:
+        "204":
+          description: 退会成功（ボディなし）
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/UserNotRegistered"
+
+  /users/{id}:
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: 他ユーザーのプロフィール
+      description: |
+        指定したユーザーの公開プロフィールを返す。
+
+        - 自分用の `User` とは別の、公開してよい項目だけの `PublicUser` を返す。
+        - 存在しない・退会済み・IDの形式が不正な場合は、いずれも404（`USER_NOT_FOUND`）。
+        - 自分のIDを指定した場合も `PublicUser` で返す（`friendship_status` は `none`）。
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+              example:
+                id: 01J9Y2ABCDEFGHJKMNPQRSTVWX
+                handle: hanako_squat
+                display_name: はなこ
+                bio: スクワット毎日
+                avatar_url: null
+                friendship_status: friends
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+
+  /me/training-calendar:
+    get:
+      tags:
+        - training_calendar
+      operationId: getMyTrainingCalendar
+      summary: 自分の1ヶ月分のトレーニング履歴を取得する
+      description: |
+        指定した月の、ログイン中ユーザーのトレーニング履歴を日付ごとにまとめて返す。
+
+        - IDOR対策としてFirebaseが発行するトークンをAuthorizationヘッダーに含める
+          リクエストにユーザーIDは含めない。
+        - 「何月何日か」の判定は、DBに保存されたユーザーのタイムゾーン
+          （デフォルト Asia/Tokyo）を基準に行う。
+        - トレーニングをしていない日は days に含めない。
+        - 指定月にトレーニングが1件もない場合は、days を空配列で返す（404にはしない）。
+      parameters:
+        - name: month
+          in: query
+          required: true
+          description: 取得する月。YYYY-MM 形式で、月は必ず2桁（ゼロ埋め）。
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+            example: "2026-10"
+      responses:
+        "200":
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingCalendarResponse"
+              examples:
+                has_training:
+                  summary: トレーニング記録がある月
+                  value:
+                    month: "2026-10"
+                    days:
+                      - date: "2026-10-03"
+                        body_parts:
+                          - chest
+                          - arms
+                        sessions:
+                          - session_id: 881
+                            started_at: "2026-10-03T10:15:00+09:00"
+                            exercises:
+                              - exercise_id: 12
+                                name: ベンチプレス
+                                body_part: chest
+                                sets:
+                                  - weight_kg: 60
+                                    reps: 10
+                                  - weight_kg: 60
+                                    reps: 8
+                              - exercise_id: 31
+                                name: トライセプスエクステンション
+                                body_part: arms
+                                sets:
+                                  - weight_kg: 15
+                                    reps: 12
+                      - date: "2026-10-05"
+                        body_parts:
+                          - back
+                        sessions:
+                          - session_id: 902
+                            started_at: "2026-10-05T19:40:00+09:00"
+                            exercises:
+                              - exercise_id: 20
+                                name: デッドリフト
+                                body_part: back
+                                sets:
+                                  - weight_kg: 100
+                                    reps: 5
+                empty_month:
+                  summary: トレーニング記録がない月
+                  value:
+                    month: "2026-11"
+                    days: []
+        "400":
+          description: month が未指定、または形式が不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: invalid_month
+                  message: month は YYYY-MM 形式で指定してください
+        "401":
+          description: ID トークンがない、不正、または有効期限切れ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: unauthorized
+                  message: 認証に失敗しました
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: internal_error
+                  message: サーバーでエラーが発生しました
+
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase Authで取得したIDトークン
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      description: |
+        ユーザーID（ULID）。
+        形式が不正な場合も400ではなく404を返すため、ここでは形式を制限していない。
+      schema:
+        type: string
+        example: 01J9Y2ABCDEFGHJKMNPQRSTVWX
+
+  schemas:
+    UserId:
+      type: string
+      description: サーバーが発行するユーザーID（ULID）
+      pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+      example: 01J9X8K2ZQ4M7N3P5R6S8T0VWX
+
+    Handle:
+      type: string
+      description: 全ユーザーで重複しないユーザー名。英小文字・数字・`_` のみ
+      minLength: 3
+      maxLength: 20
+      pattern: "^[a-z0-9_]{3,20}$"
+      example: taro_lifts
+
+    DisplayName:
+      type: string
+      description: 表示名（重複可）。前後の空白は除去され、空白のみは不可
+      minLength: 1
+      maxLength: 30
+      example: たろう
+
+    Bio:
+      type: string
+      description: 自己紹介
+      maxLength: 160
+      example: ベンチ100kgが目標
+
+    Timezone:
+      type: string
+      description: IANAタイムゾーン名。「ユーザーにとっての今日」の判定に使う
+      example: Asia/Tokyo
+
+    WorkoutVisibility:
+      type: string
+      description: |
+        筋トレ記録の公開範囲。
+        - `friends`: フレンドのみ
+        - `private`: 自分のみ
+      enum: [friends, private]
+
+    FriendshipStatus:
+      type: string
+      description: |
+        リクエストしたユーザーから見た、相手との関係。
+        - `none`: 無関係
+        - `request_sent`: 自分がフレンド申請中
+        - `request_received`: 相手から申請が来ている
+        - `friends`: フレンド
+      enum: [none, request_sent, request_received, friends]
+
+    Privacy:
+      type: object
+      description: 公開設定
+      required: [workout_visibility, show_active_status]
+      properties:
+        workout_visibility:
+          $ref: "#/components/schemas/WorkoutVisibility"
+        show_active_status:
+          type: boolean
+          description: 「今アクティブか」をフレンドに見せるか
+
+    User:
+      type: object
+      description: 自分用のユーザー情報（本人にのみ返す）
+      required:
+        - id
+        - handle
+        - display_name
+        - bio
+        - avatar_url
+        - timezone
+        - privacy
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        handle:
+          $ref: "#/components/schemas/Handle"
+        display_name:
+          $ref: "#/components/schemas/DisplayName"
+        bio:
+          type: string
+          maxLength: 160
+          nullable: true
+          description: 自己紹介。未設定なら null
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: アイコン画像のURL。このAPIでは変更不可（別APIで設定予定）
+        timezone:
+          $ref: "#/components/schemas/Timezone"
+        privacy:
+          $ref: "#/components/schemas/Privacy"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PublicUser:
+      type: object
+      description: 他ユーザーに見せる公開プロフィール
+      required:
+        - id
+        - handle
+        - display_name
+        - bio
+        - avatar_url
+        - friendship_status
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        handle:
+          $ref: "#/components/schemas/Handle"
+        display_name:
+          $ref: "#/components/schemas/DisplayName"
+        bio:
+          type: string
+          maxLength: 160
+          nullable: true
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        friendship_status:
+          $ref: "#/components/schemas/FriendshipStatus"
+
+    RegisterUserRequest:
+      type: object
+      description: 初回登録のリクエスト。handleは指定できない（自動生成）
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name:
+          $ref: "#/components/schemas/DisplayName"
+        bio:
+          $ref: "#/components/schemas/Bio"
+        timezone:
+          allOf:
+            - $ref: "#/components/schemas/Timezone"
+          default: Asia/Tokyo
+          description: 省略時は `Asia/Tokyo`
+        privacy:
+          type: object
+          description: 省略した項目は初期値（workout_visibility=friends, show_active_status=true）
+          additionalProperties: false
+          properties:
+            workout_visibility:
+              allOf:
+                - $ref: "#/components/schemas/WorkoutVisibility"
+              default: friends
+            show_active_status:
+              type: boolean
+              default: true
+
+    UpdateUserRequest:
+      type: object
+      description: 部分更新のリクエスト。少なくとも1項目必要
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        handle:
+          $ref: "#/components/schemas/Handle"
+        display_name:
+          $ref: "#/components/schemas/DisplayName"
+        bio:
+          type: string
+          maxLength: 160
+          nullable: true
+          description: null を送ると自己紹介を消す
+        timezone:
+          $ref: "#/components/schemas/Timezone"
+        privacy:
+          type: object
+          description: 送った項目だけ更新する。少なくとも1項目必要
+          additionalProperties: false
+          minProperties: 1
+          properties:
+            workout_visibility:
+              $ref: "#/components/schemas/WorkoutVisibility"
+            show_active_status:
+              type: boolean
+
+    TrainingCalendarResponse:
+      type: object
+      required:
+        - month
+        - days
+      properties:
+        month:
+          type: string
+          description: 対象の月（リクエストの month と同じ値）
+          example: "2026-10"
+        days:
+          type: array
+          description: トレーニングをした日の一覧。日付の昇順。
+          items:
+            $ref: "#/components/schemas/TrainingDay"
+
+    TrainingDay:
+      type: object
+      required:
+        - date
+        - body_parts
+        - sessions
+      properties:
+        date:
+          type: string
+          format: date
+          description: ユーザーのタイムゾーン基準の日付
+          example: "2026-10-03"
+        body_parts:
+          type: array
+          description: |
+            その日にトレーニングした部位の一覧（重複なし）。
+            カレンダーのマス表示用の要約で、sessions 内の種目から算出する。
+          items:
+            $ref: "#/components/schemas/BodyPart"
+        sessions:
+          type: array
+          description: その日のトレーニングセッション。開始時刻の昇順。
+          items:
+            $ref: "#/components/schemas/TrainingSession"
+
+    TrainingSession:
+      type: object
+      required:
+        - session_id
+        - started_at
+        - exercises
+      properties:
+        session_id:
+          type: integer
+          format: int64
+          example: 881
+        started_at:
+          type: string
+          format: date-time
+          description: セッション開始日時（ISO 8601、タイムゾーンのオフセット付き）
+          example: "2026-10-03T10:15:00+09:00"
+        exercises:
+          type: array
+          description: 実施した種目。実施順。
+          items:
+            $ref: "#/components/schemas/ExerciseRecord"
+
+    ExerciseRecord:
+      type: object
+      required:
+        - exercise_id
+        - name
+        - body_part
+        - sets
+      properties:
+        exercise_id:
+          type: integer
+          format: int64
+          description: 種目マスタのID
+          example: 12
+        name:
+          type: string
+          description: 種目名（種目マスタの値をそのまま返す）
+          example: ベンチプレス
+        body_part:
+          $ref: "#/components/schemas/BodyPart"
+        sets:
+          type: array
+          description: セットの記録。実施順。
+          items:
+            $ref: "#/components/schemas/ExerciseSet"
+
+    ExerciseSet:
+      type: object
+      required:
+        - weight_kg
+        - reps
+      properties:
+        weight_kg:
+          type: number
+          description: 重量（kg）。自重種目は 0。
+          minimum: 0
+          example: 60
+        reps:
+          type: integer
+          description: 回数
+          minimum: 1
+          example: 10
+
+    BodyPart:
+      type: string
+      description: |
+        部位コード。表示名（胸・背中など）への変換はフロントで行う。
+        ※一覧は仮。最終的な分け方は別途決定する。
+      enum:
+        - chest
+        - back
+        - shoulders
+        - arms
+        - legs
+        - abs
+      example: chest
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: プログラムで判定するためのエラーコード
+              example: invalid_month
+            message:
+              type: string
+              description: 人が読むためのエラーメッセージ
+              example: month は YYYY-MM 形式で指定してください
+
+    ErrorDetail:
+      type: object
+      required: [field, reason]
+      properties:
+        field:
+          type: string
+          description: 問題のある項目名（ネストは `privacy.workout_visibility` のようにドットでつなぐ）
+          example: handle
+        reason:
+          type: string
+          description: |
+            項目ごとのエラー理由。
+            - `REQUIRED`: 必須項目がない
+            - `INVALID_FORMAT`: 形式・文字数が不正
+            - `HANDLE_RESERVED`: 使用できないhandle（`user_` 始まり・予約語）
+            - `UNKNOWN_FIELD`: 定義されていない項目
+            - `READ_ONLY`: 変更できない項目
+          enum:
+            [
+              REQUIRED,
+              INVALID_FORMAT,
+              HANDLE_RESERVED,
+              UNKNOWN_FIELD,
+              READ_ONLY,
+            ]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                プログラムで判定するためのエラーコード。
+                - `VALIDATION_ERROR`: 入力内容の誤り（詳細は details）
+                - `UNAUTHENTICATED`: トークンがない・無効・期限切れ
+                - `USER_NOT_REGISTERED`: Firebaseにはログイン済みだが未登録
+                - `USER_NOT_FOUND`: 指定したユーザーが見つからない
+                - `HANDLE_TAKEN`: handleが他人に使われている
+                - `INTERNAL_ERROR`: サーバー内部のエラー
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHENTICATED
+                - USER_NOT_REGISTERED
+                - USER_NOT_FOUND
+                - HANDLE_TAKEN
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: 人間向けの説明（開発者向け。画面表示はcodeを見てアプリ側で用意する）
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+
+  responses:
+    ValidationError:
+      description: 入力内容に誤りがある
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: 入力内容に誤りがあります
+              details:
+                - field: handle
+                  reason: HANDLE_RESERVED
+
+    Unauthenticated:
+      description: 認証されていない（トークンがない・無効・期限切れ）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: 認証が必要です
+
+    UserNotRegistered:
+      description: Firebaseにはログインしているが、まだ初回登録していない
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: USER_NOT_REGISTERED
+              message: ユーザー登録が完了していません
+
+    UserNotFound:
+      description: ユーザーが存在しない・退会済み・IDの形式が不正
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: USER_NOT_FOUND
+              message: ユーザーが見つかりません
+
+    HandleTaken:
+      description: handleが他のユーザーに使われている
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: HANDLE_TAKEN
+              message: このユーザー名は既に使われています
+
+    InternalError:
+      description: サーバー内部のエラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: サーバーでエラーが発生しました
