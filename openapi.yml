@@ -4,18 +4,10 @@ info:
   title: 筋トレアプリ API
   version: 0.1.0
   description: |
-    筋トレ記録とユーザー間の競争で継続を促すモバイルアプリのバックエンドAPI。
-
     ## 共通ルール
-    - JSONの項目名はスネークケース。
-    - 日時はすべてUTCのISO 8601形式（例: `2026-10-05T04:00:00Z`）。
     - 認証はFirebase AuthのIDトークンを `Authorization: Bearer <IDトークン>` で送る。
       「誰からのリクエストか」はトークンからサーバーが判断するため、
       リクエストに自分のユーザーIDを含めることはない。
-
-    ## エラー
-    エラー時は全API共通で `ErrorResponse` の形を返す。アプリは `error.code` で判定し、
-    `error.message` は開発者向けの説明として扱う。
 
 servers:
   - url: http://localhost:8787/api/v1
