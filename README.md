@@ -1,21 +1,25 @@
-```txt
-npm install
-npm run dev
-```
+# fitness-app-backend
+
+筋トレアプリのバックエンド（Go）。
+
+API の仕様は [openapi.yml](openapi.yml) を正とし、そこから Go のコードを生成します。
+
+## コード生成
+
+`openapi.yml` を変更したら、次を実行して `internal/api/api.gen.go` を作り直します。
 
 ```txt
-npm run deploy
+go generate ./...
 ```
 
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
+`api.gen.go` は自動生成されるので、手で編集しません。
+
+## ビルド確認
 
 ```txt
-npm run cf-typegen
+go build ./...
 ```
 
-Pass the `CloudflareBindings` as generics when instantiating `Hono`:
+## 旧 TypeScript 版
 
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>()
-```
+Hono + Cloudflare Workers で書いていた版は、タグ `ts-final` に残っています。
