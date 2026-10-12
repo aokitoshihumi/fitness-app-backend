@@ -19,7 +19,3 @@ go generate ./...
 ```txt
 go build ./...
 ```
-
-## 旧 TypeScript 版
-
-Hono + Cloudflare Workers で書いていた版は、タグ `ts-final` に残っています。
