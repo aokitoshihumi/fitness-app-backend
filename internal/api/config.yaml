@@ -1,0 +1,8 @@
+# oapi-codegen の設定。openapi.yml から Go のコードを生成する
+package: api
+output: api.gen.go
+generate:
+  # リクエスト・レスポンスの型
+  models: true
+  # 標準ライブラリ(net/http)向けのハンドラのインターフェース
+  std-http-server: true
