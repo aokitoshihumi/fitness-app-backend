@@ -24,3 +24,6 @@ logs/
 
 # misc
 .DS_Store
+
+# ドキュメント
+docs/
