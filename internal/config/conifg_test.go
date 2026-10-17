@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoad_必須がそろっていれば読み込める(t *testing.T) {
-	t.Setenv("DB_USER", "kinre")
+	t.Setenv("DB_USER", "kintore")
 	t.Setenv("DB_PASSWORD", "secret")
 	t.Setenv("DB_NAME", "kintore_db")
 	t.Setenv("PORT", "")
