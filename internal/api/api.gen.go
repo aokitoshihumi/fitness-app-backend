@@ -195,6 +195,12 @@ type WorkoutRecord struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+// WorkoutRecordList defines model for WorkoutRecordList.
+type WorkoutRecordList struct {
+	// WorkoutRecords 記録の一覧。開始日時の新しい順。
+	WorkoutRecords []WorkoutRecord `json:"workout_records"`
+}
+
 // WorkoutSet 1セット（iOS の `WorkoutSet`）
 type WorkoutSet struct {
 	// Id アプリが作った UUID
@@ -226,6 +232,15 @@ type GetMyTrainingCalendarParams struct {
 	Month string `form:"month" json:"month"`
 }
 
+// ListWorkoutRecordsParams defines parameters for ListWorkoutRecords.
+type ListWorkoutRecordsParams struct {
+	// From この日時以降に始めた記録だけを返す（この日時を含む）
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+
+	// To この日時より前に始めた記録だけを返す（この日時は含まない）
+	To *time.Time `form:"to,omitempty" json:"to,omitempty"`
+}
+
 // PutWorkoutRecordJSONRequestBody defines body for PutWorkoutRecord for application/json ContentType.
 type PutWorkoutRecordJSONRequestBody = WorkoutRecord
 
@@ -234,6 +249,9 @@ type ServerInterface interface {
 	// GetMyTrainingCalendar 自分の1ヶ月分のトレーニング履歴を取得する
 	// (GET /me/training-calendar)
 	GetMyTrainingCalendar(w http.ResponseWriter, r *http.Request, params GetMyTrainingCalendarParams)
+	// ListWorkoutRecords 自分のトレーニングの記録の一覧を取得する
+	// (GET /workout-records)
+	ListWorkoutRecords(w http.ResponseWriter, r *http.Request, params ListWorkoutRecordsParams)
 	// PutWorkoutRecord 記録を保存する（新規登録と編集の両方）
 	// (PUT /workout-records/{workoutId})
 	PutWorkoutRecord(w http.ResponseWriter, r *http.Request, workoutId openapi_types.UUID)
@@ -272,6 +290,52 @@ func (siw *ServerInterfaceWrapper) GetMyTrainingCalendar(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMyTrainingCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWorkoutRecords operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkoutRecords(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkoutRecordsParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkoutRecords(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -428,6 +492,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/training-calendar", wrapper.GetMyTrainingCalendar)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workout-records", wrapper.ListWorkoutRecords)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.PutWorkoutRecord)
 
 	return m
