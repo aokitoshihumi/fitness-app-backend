@@ -307,6 +307,27 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+    delete:
+      tags:
+        - workout_records
+      operationId: deleteWorkoutRecord
+      summary: 記録を削除する
+      description: |
+        自分の記録を削除する。
+
+        - 記録がない場合（削除済みを含む）も 204 を返す。送信に失敗して送り直したときに、
+          エラーにならないようにするため
+        - ほかのユーザーの記録の ID を指定しても削除はせず、204 を返す（記録があるかどうかを知られないため）
+      responses:
+        "204":
+          description: 削除した（または、もともとなかった）
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     firebaseAuth:

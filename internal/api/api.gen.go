@@ -252,6 +252,9 @@ type ServerInterface interface {
 	// ListWorkoutRecords 自分のトレーニングの記録の一覧を取得する
 	// (GET /workout-records)
 	ListWorkoutRecords(w http.ResponseWriter, r *http.Request, params ListWorkoutRecordsParams)
+	// DeleteWorkoutRecord 記録を削除する
+	// (DELETE /workout-records/{workoutId})
+	DeleteWorkoutRecord(w http.ResponseWriter, r *http.Request, workoutId openapi_types.UUID)
 	// PutWorkoutRecord 記録を保存する（新規登録と編集の両方）
 	// (PUT /workout-records/{workoutId})
 	PutWorkoutRecord(w http.ResponseWriter, r *http.Request, workoutId openapi_types.UUID)
@@ -336,6 +339,32 @@ func (siw *ServerInterfaceWrapper) ListWorkoutRecords(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListWorkoutRecords(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWorkoutRecord operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkoutRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workoutId" -------------
+	var workoutId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workoutId", r.PathValue("workoutId"), &workoutId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workoutId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkoutRecord(w, r, workoutId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -493,6 +522,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/training-calendar", wrapper.GetMyTrainingCalendar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workout-records", wrapper.ListWorkoutRecords)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.DeleteWorkoutRecord)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.PutWorkoutRecord)
 
 	return m
