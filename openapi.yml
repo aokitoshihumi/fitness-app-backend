@@ -142,6 +142,84 @@ paths:
                   code: internal_error
                   message: サーバーでエラーが発生しました
 
+  /workout-records:
+    get:
+      tags:
+        - workout_records
+      operationId: listWorkoutRecords
+      summary: 自分のトレーニングの記録の一覧を取得する
+      description: |
+        ログイン中ユーザーの記録を、開始日時の新しい順で返す。
+        iOS アプリは、この一覧から「前回の値」を探す（新しい順を前提にしている）。
+
+        - from / to を省くと、すべての記録を返す
+        - 該当する記録がない場合は、workout_records を空配列で返す（404にはしない）
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: この日時以降に始めた記録だけを返す（この日時を含む）
+          schema:
+            type: string
+            format: date-time
+            example: "2026-10-01T00:00:00+09:00"
+        - name: to
+          in: query
+          required: false
+          description: この日時より前に始めた記録だけを返す（この日時は含まない）
+          schema:
+            type: string
+            format: date-time
+            example: "2026-11-01T00:00:00+09:00"
+      responses:
+        "200":
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutRecordList"
+              examples:
+                has_records:
+                  summary: 記録がある場合
+                  value:
+                    workout_records:
+                      - id: "5C1E2B9A-7D0F-4E52-9B6A-2F1C0D8E4A11"
+                        started_at: "2026-10-05T19:40:00+09:00"
+                        ended_at: "2026-10-05T20:25:00+09:00"
+                        exercises:
+                          - id: "0B7F6C2D-3E4A-4F1B-8C9D-1A2B3C4D5E60"
+                            exercise:
+                              id: deadlift
+                              name: デッドリフト
+                              body_part: back
+                            sets:
+                              - id: "9E8D7C6B-5A49-4382-9170-6F5E4D3C2B1A"
+                                weight: 100
+                                reps: 5
+                      - id: "3F2504E0-4F89-41D3-9A0C-0305E82C3301"
+                        started_at: "2026-10-03T19:02:00+09:00"
+                        ended_at: "2026-10-03T20:10:00+09:00"
+                        exercises:
+                          - id: "A1B2C3D4-E5F6-4789-8ABC-DEF012345678"
+                            exercise:
+                              id: bench-press
+                              name: ベンチプレス
+                              body_part: chest
+                            sets:
+                              - id: "11111111-2222-4333-8444-555555555555"
+                                weight: 60
+                                reps: 10
+                empty:
+                  summary: 記録がない場合
+                  value:
+                    workout_records: []
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /workout-records/{workoutId}:
     parameters:
       - name: workoutId
@@ -374,6 +452,17 @@ components:
           description: 回数
           minimum: 1
           example: 10
+
+    WorkoutRecordList:
+      type: object
+      required:
+        - workout_records
+      properties:
+        workout_records:
+          type: array
+          description: 記録の一覧。開始日時の新しい順。
+          items:
+            $ref: "#/components/schemas/WorkoutRecord"
 
     WorkoutRecord:
       type: object
