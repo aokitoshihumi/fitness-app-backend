@@ -66,6 +66,27 @@ type ErrorResponse struct {
 	} `json:"error"`
 }
 
+// Exercise 種目（iOS の `Exercise`）。記録には、記録したときの種目名と部位をそのまま保存する。
+// 今はアプリにあらかじめ用意した種目だけを使う。
+type Exercise struct {
+	// BodyPart 部位コード。表示名（胸・背中など）への変換はフロントで行う。
+	// ※一覧は仮。最終的な分け方は別途決定する。
+	//
+	//
+	// Example: chest
+	BodyPart BodyPart `json:"body_part"`
+
+	// Id 種目の ID（英小文字とハイフン）
+	//
+	// Example: bench-press
+	Id string `json:"id"`
+
+	// Name 種目名
+	//
+	// Example: ベンチプレス
+	Name string `json:"name"`
+}
+
 // ExerciseRecord defines model for ExerciseRecord.
 type ExerciseRecord struct {
 	// BodyPart 部位コード。表示名（胸・背中など）への変換はフロントで行う。
@@ -142,17 +163,80 @@ type TrainingSession struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+// WorkoutExercise トレーニング内の1種目（iOS の `WorkoutExercise`）
+type WorkoutExercise struct {
+	// Exercise 種目（iOS の `Exercise`）。記録には、記録したときの種目名と部位をそのまま保存する。
+	// 今はアプリにあらかじめ用意した種目だけを使う。
+	Exercise Exercise `json:"exercise"`
+
+	// Id アプリが作った UUID。同じ種目を1回のトレーニングで2回行っても区別できる
+	Id openapi_types.UUID `json:"id"`
+
+	// Sets セット。実施順。
+	Sets []WorkoutSet `json:"sets"`
+}
+
+// WorkoutRecord 1回のトレーニング（iOS の `Workout`）
+type WorkoutRecord struct {
+	// EndedAt 終了日時。started_at 以降。
+	//
+	// Example: 2026-10-03T20:10:00+09:00
+	EndedAt time.Time `json:"ended_at"`
+
+	// Exercises 行った種目。アプリで並べた順。
+	Exercises []WorkoutExercise `json:"exercises"`
+
+	// Id アプリが作った UUID
+	Id openapi_types.UUID `json:"id"`
+
+	// StartedAt 開始日時
+	//
+	// Example: 2026-10-03T19:02:00+09:00
+	StartedAt time.Time `json:"started_at"`
+}
+
+// WorkoutSet 1セット（iOS の `WorkoutSet`）
+type WorkoutSet struct {
+	// Id アプリが作った UUID
+	Id openapi_types.UUID `json:"id"`
+
+	// Reps 回数
+	//
+	// Example: 10
+	Reps int `json:"reps"`
+
+	// Weight 重量（kg）。入力していない（自重など）ときは null。0kg とは区別する。
+	//
+	// Example: 60
+	Weight *float64 `json:"weight"`
+}
+
+// BadRequest defines model for BadRequest.
+type BadRequest = ErrorResponse
+
+// InternalError defines model for InternalError.
+type InternalError = ErrorResponse
+
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = ErrorResponse
+
 // GetMyTrainingCalendarParams defines parameters for GetMyTrainingCalendar.
 type GetMyTrainingCalendarParams struct {
 	// Month 取得する月。YYYY-MM 形式で、月は必ず2桁（ゼロ埋め）。
 	Month string `form:"month" json:"month"`
 }
 
+// PutWorkoutRecordJSONRequestBody defines body for PutWorkoutRecord for application/json ContentType.
+type PutWorkoutRecordJSONRequestBody = WorkoutRecord
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetMyTrainingCalendar 自分の1ヶ月分のトレーニング履歴を取得する
 	// (GET /me/training-calendar)
 	GetMyTrainingCalendar(w http.ResponseWriter, r *http.Request, params GetMyTrainingCalendarParams)
+	// PutWorkoutRecord 記録を保存する（新規登録と編集の両方）
+	// (PUT /workout-records/{workoutId})
+	PutWorkoutRecord(w http.ResponseWriter, r *http.Request, workoutId openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -188,6 +272,32 @@ func (siw *ServerInterfaceWrapper) GetMyTrainingCalendar(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMyTrainingCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutWorkoutRecord operation middleware
+func (siw *ServerInterfaceWrapper) PutWorkoutRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workoutId" -------------
+	var workoutId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workoutId", r.PathValue("workoutId"), &workoutId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workoutId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutWorkoutRecord(w, r, workoutId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -318,6 +428,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/training-calendar", wrapper.GetMyTrainingCalendar)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.PutWorkoutRecord)
 
 	return m
 }
