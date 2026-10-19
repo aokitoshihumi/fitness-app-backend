@@ -30,10 +30,9 @@ GET /api/v1/provocations/{id} 詳細（センキュー一覧を含む）
 POST /api/v1/provocations/{id}/thanks センキュー送信
 
 ■ 筋トレ記録
-POST /api/v1/workout-records 記録登録（セッション単位で一括）
+PUT /api/v1/workout-records/{id} 登録・修正（ID はアプリが作る UUID。丸ごと置き換え）
 GET /api/v1/workout-records?exercise_id=&from=&to= 履歴
 GET /api/v1/workout-records/{id} 詳細
-PATCH /api/v1/workout-records/{id} 修正
 DELETE /api/v1/workout-records/{id} 削除
 
 ■ タイムライン

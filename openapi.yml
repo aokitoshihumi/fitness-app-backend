@@ -8,6 +8,16 @@ info:
     - 認証はFirebase AuthのIDトークンを `Authorization: Bearer <IDトークン>` で送る。
       「誰からのリクエストか」はトークンからサーバーが判断するため、
       リクエストに自分のユーザーIDを含めることはない。
+    - 日時は ISO 8601（タイムゾーンのオフセット付き）で送受信する。
+
+    ## 筋トレ記録（workout_records）と iOS アプリ（WorkoutLog）の対応
+    記録のデータの形は、iOS アプリの `Workout` / `WorkoutExercise` / `WorkoutSet` / `Exercise` と
+    同じにしている。アプリは記録を端末内に保存しており、その保存先をサーバーに置き換えられるようにするため。
+
+    - 記録・種目・セットの ID はアプリが UUID で作る。電波がなくても記録でき、
+      送信に失敗したときに同じ内容を送り直しても、記録が2つにならない（冪等）。
+    - 「保存して終了」と「編集して保存」は、どちらも「その ID の記録を丸ごと置き換える」操作
+      （`PUT /workout-records/{workoutId}`）。アプリも履歴の中の同じ ID の記録を差し替えている。
 
 servers:
   - url: http://localhost:8787/api/v1
@@ -18,6 +28,8 @@ servers:
 tags:
   - name: training_calendar
     description: 月間カレンダー表示用のトレーニング履歴
+  - name: workout_records
+    description: トレーニングの記録
 
 security:
   - firebaseAuth: []
@@ -130,6 +142,93 @@ paths:
                   code: internal_error
                   message: サーバーでエラーが発生しました
 
+  /workout-records/{workoutId}:
+    parameters:
+      - name: workoutId
+        in: path
+        required: true
+        description: 記録の ID（アプリが作った UUID）
+        schema:
+          type: string
+          format: uuid
+          example: "3F2504E0-4F89-41D3-9A0C-0305E82C3301"
+
+    put:
+      tags:
+        - workout_records
+      operationId: putWorkoutRecord
+      summary: 記録を保存する（新規登録と編集の両方）
+      description: |
+        その ID の記録がなければ新しく登録し、あれば丸ごと置き換える。
+        アプリの「保存して終了」と「編集して保存」の両方で使う。
+
+        - 同じ内容を何度送っても結果は同じ（冪等）。送信に失敗したら、そのまま送り直してよい
+        - 本文の id はパスの workoutId と同じにする
+        - 本文の記録は、アプリが保存するときと同じく「回数を入力したセット」だけを含める
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkoutRecord"
+            example:
+              id: "3F2504E0-4F89-41D3-9A0C-0305E82C3301"
+              started_at: "2026-10-03T19:02:00+09:00"
+              ended_at: "2026-10-03T20:10:00+09:00"
+              exercises:
+                - id: "A1B2C3D4-E5F6-4789-8ABC-DEF012345678"
+                  exercise:
+                    id: bench-press
+                    name: ベンチプレス
+                    body_part: chest
+                  sets:
+                    - id: "11111111-2222-4333-8444-555555555555"
+                      weight: 60
+                      reps: 10
+                    - id: "66666666-7777-4888-9999-AAAAAAAAAAAA"
+                      weight: 60
+                      reps: 8
+                - id: "BBBBBBBB-CCCC-4DDD-8EEE-FFFFFFFFFFFF"
+                  exercise:
+                    id: crunch
+                    name: クランチ
+                    body_part: abs
+                  sets:
+                    - id: "12345678-9ABC-4DEF-8123-456789ABCDEF"
+                      weight: null
+                      reps: 20
+      responses:
+        "200":
+          description: 既存の記録を置き換えた
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutRecord"
+        "201":
+          description: 新しく登録した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutRecord"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: |
+            この ID の記録がほかのユーザーのものとしてすでにある。
+            UUID は通常重ならないため、ふつうは起きない。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: id_conflict
+                  message: この ID はすでに使われています
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -137,6 +236,38 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Firebase Authで取得したIDトークン
+
+  responses:
+    BadRequest:
+      description: パラメータや本文の形式が不正
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: invalid_request
+              message: リクエストの形式が正しくありません
+    Unauthorized:
+      description: ID トークンがない、不正、または有効期限切れ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: unauthorized
+              message: 認証に失敗しました
+    InternalError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: internal_error
+              message: サーバーでエラーが発生しました
 
   schemas:
     TrainingCalendarResponse:
@@ -242,6 +373,105 @@ components:
           type: integer
           description: 回数
           minimum: 1
+          example: 10
+
+    WorkoutRecord:
+      type: object
+      description: 1回のトレーニング（iOS の `Workout`）
+      required:
+        - id
+        - started_at
+        - ended_at
+        - exercises
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: アプリが作った UUID
+        started_at:
+          type: string
+          format: date-time
+          description: 開始日時
+          example: "2026-10-03T19:02:00+09:00"
+        ended_at:
+          type: string
+          format: date-time
+          description: 終了日時。started_at 以降。
+          example: "2026-10-03T20:10:00+09:00"
+        exercises:
+          type: array
+          description: 行った種目。アプリで並べた順。
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WorkoutExercise"
+
+    WorkoutExercise:
+      type: object
+      description: トレーニング内の1種目（iOS の `WorkoutExercise`）
+      required:
+        - id
+        - exercise
+        - sets
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: アプリが作った UUID。同じ種目を1回のトレーニングで2回行っても区別できる
+        exercise:
+          $ref: "#/components/schemas/Exercise"
+        sets:
+          type: array
+          description: セット。実施順。
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WorkoutSet"
+
+    Exercise:
+      type: object
+      description: |
+        種目（iOS の `Exercise`）。記録には、記録したときの種目名と部位をそのまま保存する。
+        今はアプリにあらかじめ用意した種目だけを使う。
+      required:
+        - id
+        - name
+        - body_part
+      properties:
+        id:
+          type: string
+          description: 種目の ID（英小文字とハイフン）
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          example: bench-press
+        name:
+          type: string
+          description: 種目名
+          minLength: 1
+          example: ベンチプレス
+        body_part:
+          $ref: "#/components/schemas/BodyPart"
+
+    WorkoutSet:
+      type: object
+      description: 1セット（iOS の `WorkoutSet`）
+      required:
+        - id
+        - weight
+        - reps
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: アプリが作った UUID
+        weight:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: 重量（kg）。入力していない（自重など）ときは null。0kg とは区別する。
+          example: 60
+        reps:
+          type: integer
+          minimum: 0
+          description: 回数
           example: 10
 
     BodyPart:
