@@ -1,0 +1,5 @@
+CREATE TABLE body_parts (
+    id   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code TEXT  NOT NULL UNIQUE
+    label  TEXT
+);
