@@ -20,6 +20,20 @@ go generate ./...
 go build ./...
 ```
 
+## ローカルの DB とマイグレーション
+
+DB のテーブルは `db/migrations/` の SQL で管理します（golang-migrate を使用。インストールは不要）。
+
+```txt
+make db-up            # PostgreSQL を起動する
+make migrate-up       # まだ流していないマイグレーションをすべて流す
+make migrate-down     # 最後のマイグレーションを1つ戻す
+make migrate-version  # どこまで流したかを表示する
+make migrate-create name=create_users  # 新しいマイグレーションファイルを作る
+```
+
+`.env` の値は引用符で囲まずに書きます（`make` は引用符もそのまま値として読むため）。
+
 ## 旧 TypeScript 版
 
 Hono + Cloudflare Workers で書いていた版は、タグ `ts-final` に残っています。
