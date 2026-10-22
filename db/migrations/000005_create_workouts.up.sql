@@ -16,12 +16,12 @@ CREATE TABLE workout_exercises (
     id            UUID    PRIMARY KEY,
     workout_id    UUID    NOT NULL REFERENCES workouts (id) ON DELETE CASCADE,
     -- アプリで並べた順（0 から）
-    position      INTEGER NOT NULL CHECK (position >= 0), -- フロントでnセット目がmkgという対応付が必要なためposition(セット目)を作る
+    position      INTEGER NOT NULL CHECK (position >= 0), -- 種目の並び順。ユーザーが並べ替えた順を再現するために持つ
     exercise_id   TEXT    NOT NULL REFERENCES exercises (id),
     -- 記録したときの種目名と部位をそのまま残す。あとで種目名が変わっても過去の記録は変わらない
     exercise_name TEXT    NOT NULL,
     body_part     TEXT    NOT NULL REFERENCES body_parts (code),
-    UNIQUE (workout_id, position) -- work_outidかつnセット目の組み合わせのUNIQUEは許さない
+    UNIQUE (workout_id, position) -- 同じ記録の中で、同じ並び順の番号が2つあることを許さない
 );
 
 -- 1セット（iOS の WorkoutSet）

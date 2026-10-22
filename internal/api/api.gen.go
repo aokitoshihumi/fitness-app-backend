@@ -206,6 +206,11 @@ type WorkoutSet struct {
 	// Id アプリが作った UUID
 	Id openapi_types.UUID `json:"id"`
 
+	// Memo セットごとのメモ（「補助あり」など）。省略したときは空文字として保存する。
+	//
+	// Example: 補助あり
+	Memo *string `json:"memo,omitempty"`
+
 	// Reps 回数
 	//
 	// Example: 10
