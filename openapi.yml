@@ -583,6 +583,11 @@ components:
           minimum: 0
           description: 回数
           example: 10
+        memo:
+          type: string
+          default: ""
+          description: セットごとのメモ（「補助あり」など）。省略したときは空文字として保存する。
+          example: 補助あり
 
     BodyPart:
       type: string
