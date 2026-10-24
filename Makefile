@@ -10,7 +10,7 @@ DATABASE_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_
 MIGRATE_VERSION := v4.20.1
 MIGRATE := go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION)
 
-.PHONY: db-up db-down migrate-up migrate-down migrate-version migrate-create
+.PHONY: db-up db-down migrate-up migrate-down migrate-version migrate-create run
 
 ## ローカルの PostgreSQL を起動する
 db-up:
@@ -35,3 +35,6 @@ migrate-version:
 ## 新しいマイグレーションファイルを作る（例: make migrate-create name=create_users）
 migrate-create:
 	@$(MIGRATE) create -ext sql -dir db/migrations -seq $(name)
+
+run:
+	go run ./cmd/server
