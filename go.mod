@@ -5,8 +5,10 @@ go 1.27.2
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 require (
+	firebase.google.com/go/v4 v4.22.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/oapi-codegen/runtime v1.7.0
+	google.golang.org/api v0.308.0
 )
 
 require (
@@ -20,9 +22,6 @@ require (
 	cloud.google.com/go/longrunning v1.4.0 // indirect
 	cloud.google.com/go/monitoring v1.32.0 // indirect
 	cloud.google.com/go/storage v1.70.0 // indirect
-	firebase.google.com/go v3.13.0+incompatible // indirect
-	firebase.google.com/go/v4 v4.22.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.38.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.62.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.62.0 // indirect
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
@@ -77,8 +76,6 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
-	google.golang.org/api v0.308.0 // indirect
-	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.6 // indirect
 	google.golang.org/genproto v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261019180522-ce908d29299b // indirect
