@@ -14,6 +14,8 @@ type Config struct {
 	DBUser string
 	DBPassword string
 	DBName string
+
+	FirebaseProjectID string // FirebaseのプロジェクトのID
 }
 
 // 環境変数を読み込んで Configを返す。
@@ -29,6 +31,8 @@ func Load()(*Config, error){
 		DBUser:	requireEnv("DB_USER", &missing),
 		DBPassword:	requireEnv("DB_PASSWORD", &missing),
 		DBName:	requireEnv("DB_NAME", &missing),
+
+		FirebaseProjectID: requireEnv("FIREBASE_PROJECT_ID", &missing),
 	}
 
 	if len(missing) > 0 {
