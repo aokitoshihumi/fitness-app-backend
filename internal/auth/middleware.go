@@ -39,7 +39,7 @@ func Middleware(v TokenVerifier) func(http.Handler) http.Handler {
 }
 
 // Bearerに設定されているトークンを取り出す。bearerとは区別しない
-func bearerToken(header string)(string, bool){
+func bearerToken(header string) (string, bool) {
 	scheme, token, found := strings.Cut(header, " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" {
 		return "", false
@@ -54,7 +54,7 @@ func UIDFromContext(ctx context.Context) (string, bool) {
 
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("WWW-Authenticate", "Bearer") // RFC9110より、401の時はBearerヘッダーをつけることがMUSTになっているらしい
+	w.Header().Set("WWW-Authenticate", "Bearer") // RFC 9110 より、401 のときは WWW-Authenticate ヘッダーを付けるのが MUST
 	w.WriteHeader(http.StatusUnauthorized)
 	w.Write([]byte(`{"error":{"code":"unauthorized","message":"認証に失敗しました"}}`))
 }
