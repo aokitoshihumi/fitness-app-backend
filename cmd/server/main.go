@@ -42,6 +42,12 @@ func run() error {
 	log.Printf("DBに接続しました (%s:%s/%s)", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	mux := http.NewServeMux()
+	// verifier, err := auth.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
+	// if err != nil {
+	// 	return err
+	// }
+	// middlewareが発動するのはrequireAuthで囲ったところ。準備ができたらコメントアウト
+	// requireAuth := auth.Middleware(verifier)
 	mux.HandleFunc("GET /health", handler.Healthz)
 
 	srv := &http.Server{

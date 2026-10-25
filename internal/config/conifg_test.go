@@ -9,6 +9,7 @@ func TestLoad_必須がそろっていれば読み込める(t *testing.T) {
 	t.Setenv("DB_USER", "kintore")
 	t.Setenv("DB_PASSWORD", "secret")
 	t.Setenv("DB_NAME", "kintore_db")
+	t.Setenv("FIREBASE_PROJECT_ID", "kintore-dev")
 	t.Setenv("PORT", "")
 	t.Setenv("DB_HOST", "")
 	t.Setenv("DB_PORT", "")
@@ -26,6 +27,9 @@ func TestLoad_必須がそろっていれば読み込める(t *testing.T) {
 	}
 	if cfg.DBHost != "localhost" {
 		t.Errorf("DBHost = %q, want %q（デフォルト値）", cfg.DBHost, "localhost")
+	}
+	if cfg.FirebaseProjectID != "kintore-dev" {
+		t.Errorf("FirebaseProjectID = %q, want %q", cfg.FirebaseProjectID, "kintore-dev")
 	}
 }
 
