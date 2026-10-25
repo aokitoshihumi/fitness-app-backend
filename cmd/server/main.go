@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aokitoshihumi/fitness-app-backend/internal/auth"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/config"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/database"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/handler"
@@ -43,18 +42,13 @@ func run() error {
 	log.Printf("DBに接続しました (%s:%s/%s)", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	mux := http.NewServeMux()
-	verifier, err := auth.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
-	if err != nil {
-		return err
-	}
-	// middlewareが発動するのはrequireAuthで囲ったところ
-	requireAuth := auth.Middleware(verifier)
-	// 動作確認用 TODO:あとではずす
+	// verifier, err := auth.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
+	// if err != nil {
+	// 	return err
+	// }
+	// middlewareが発動するのはrequireAuthで囲ったところ。準備ができたらコメントアウト
+	// requireAuth := auth.Middleware(verifier)
 	mux.HandleFunc("GET /health", handler.Healthz)
-	mux.Handle("GET /debug/whoami", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uid, _ := auth.UIDFromContext(r.Context())
-		w.Write([]byte(uid))
-	})))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
