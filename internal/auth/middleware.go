@@ -19,7 +19,7 @@ type ctxKey struct{}
 func Middleware(v TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			idToken, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			idToken, ok := bearerToken(r.Header.Get("Authorization"))
 			if !ok || idToken == "" {
 				writeUnauthorized(w)
 				return
@@ -38,6 +38,15 @@ func Middleware(v TokenVerifier) func(http.Handler) http.Handler {
 	}
 }
 
+// Bearerに設定されているトークンを取り出す。bearerとは区別しない
+func bearerToken(header string)(string, bool){
+	scheme, token, found := strings.Cut(header, " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" {
+		return "", false
+	}
+	return token, true
+}
+
 func UIDFromContext(ctx context.Context) (string, bool) {
 	uid, ok := ctx.Value(ctxKey{}).(string)
 	return uid, ok
@@ -45,6 +54,7 @@ func UIDFromContext(ctx context.Context) (string, bool) {
 
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("WWW-Authenticate", "Bearer") // RFC9110より、401の時はBearerヘッダーをつけることがMUSTになっているらしい
 	w.WriteHeader(http.StatusUnauthorized)
 	w.Write([]byte(`{"error":{"code":"unauthorized","message":"認証に失敗しました"}}`))
 }
