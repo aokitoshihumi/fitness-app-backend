@@ -14,10 +14,12 @@ type FirebaseVerifier struct {
 }
 
 func NewFirebaseVerifier(ctx context.Context, projectID string)(*FirebaseVerifier, error){
+	// FirebaseSDKを使うために、Appを作る
 	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID}, option.WithoutAuthentication())
 	if err != nil{
 		return nil, fmt.Errorf("Firebaseの初期化に失敗しました: %w", err)
 	}
+	// authクライアントを作る
 	client, err := app.Auth(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Firebase Authの初期化に失敗しました: %w", err)
