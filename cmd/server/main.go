@@ -51,7 +51,7 @@ func run() error {
 	requireAuth := auth.Middleware(verifier)
 	// 動作確認用 TODO:あとではずす
 	mux.HandleFunc("GET /health", handler.Healthz)
-		mux.Handle("GET /debug/whoami", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /debug/whoami", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uid, _ := auth.UIDFromContext(r.Context())
 		w.Write([]byte(uid))
 	})))

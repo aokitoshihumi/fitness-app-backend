@@ -14,7 +14,7 @@ import (
 // 疎通確認の最大時間
 const pingTimeout = 5 * time.Second
 
-func Connect(ctx context.Context, cfg *config.Config)(*pgxpool.Pool, error){
+func Connect(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
 	// poolはプールのポインタ
 	pool, err := pgxpool.New(ctx, buildDSN(cfg))
 	if err != nil {
@@ -26,8 +26,7 @@ func Connect(ctx context.Context, cfg *config.Config)(*pgxpool.Pool, error){
 	// 必ずcancelを呼ぶ
 	defer cancel()
 
-	if err := pool.Ping(ctx);
-	err != nil {
+	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("DB(%s:%s/%s)に接続できません: %w", cfg.DBHost, cfg.DBPort, cfg.DBName, err)
 	}
@@ -39,7 +38,7 @@ func Connect(ctx context.Context, cfg *config.Config)(*pgxpool.Pool, error){
 func buildDSN(cfg *config.Config) string {
 	u := url.URL{
 		Scheme: "postgres",
-		User: url.UserPassword(cfg.DBUser, cfg.DBPassword),
+		User:   url.UserPassword(cfg.DBUser, cfg.DBPassword),
 		Host:   net.JoinHostPort(cfg.DBHost, cfg.DBPort),
 		Path:   cfg.DBName,
 	}

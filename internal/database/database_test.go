@@ -6,13 +6,13 @@ import (
 	"github.com/aokitoshihumi/fitness-app-backend/internal/config"
 )
 
-func TestBuild(t *testing.T){
+func TestBuild(t *testing.T) {
 	cfg := &config.Config{
-		DBHost: "localhost",
-		DBPort: "5432",
-		DBUser: "kintore",
+		DBHost:     "localhost",
+		DBPort:     "5432",
+		DBUser:     "kintore",
 		DBPassword: "p@ss:word/1",
-		DBName: "kintore_db",
+		DBName:     "kintore_db",
 	}
 
 	got := buildDSN(cfg)
@@ -21,4 +21,3 @@ func TestBuild(t *testing.T){
 		t.Errorf("buildDSN() = %q, want %q", got, want)
 	}
 }
-

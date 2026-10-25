@@ -9,12 +9,12 @@ import (
 //
 // 返したいレスポンス:
 //
-//	ステータス: 200 OK
-//	ヘッダー:   Content-Type: application/json
-//	本文:       {"status":"ok"}
+//		ステータス: 200 OK
+//		ヘッダー:   Content-Type: application/json
+//		本文:       {"status":"ok"}
 //
-//   - w … 返事を書き込む先（ここにヘッダー・ステータス・本文を書く）
-//   - r … 届いたリクエスト（今回は使わない）
+//	  - w … 返事を書き込む先（ここにヘッダー・ステータス・本文を書く）
+//	  - r … 届いたリクエスト（今回は使わない）
 func Healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
