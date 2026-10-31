@@ -9,9 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aokitoshihumi/fitness-app-backend/internal/auth"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/config"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/database"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/handler"
+	"github.com/aokitoshihumi/fitness-app-backend/internal/repository"
 )
 
 func main() {
@@ -42,13 +44,17 @@ func run() error {
 	log.Printf("DBに接続しました (%s:%s/%s)", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	mux := http.NewServeMux()
-	// verifier, err := auth.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
-	// if err != nil {
-	// 	return err
-	// }
-	// middlewareが発動するのはrequireAuthで囲ったところ。準備ができたらコメントアウト
-	// requireAuth := auth.Middleware(verifier)
+	verifier, err := auth.NewFirebaseVerifier(ctx, cfg.FirebaseProjectID)
+	if err != nil {
+		return err
+	}
+	// middlewareが発動するのはrequireAuthで囲ったところ
+	requireAuth := auth.Middleware(verifier)
 	mux.HandleFunc("GET /health", handler.Healthz)
+
+	users := handler.NewUsersHandler(repository.NewUserRepository(pool))
+	// requireAuth は http.Handler を返すので HandleFunc ではなく Handle で登録する
+	mux.Handle("PUT /api/v1/users/me", requireAuth(http.HandlerFunc(users.PutMe)))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

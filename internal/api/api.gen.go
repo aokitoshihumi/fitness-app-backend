@@ -254,6 +254,9 @@ type ServerInterface interface {
 	// GetMyTrainingCalendar 自分の1ヶ月分のトレーニング履歴を取得する
 	// (GET /me/training-calendar)
 	GetMyTrainingCalendar(w http.ResponseWriter, r *http.Request, params GetMyTrainingCalendarParams)
+	// PutMe ログイン中のユーザーを登録する（初回ログイン時）
+	// (PUT /users/me)
+	PutMe(w http.ResponseWriter, r *http.Request)
 	// ListWorkoutRecords 自分のトレーニングの記録の一覧を取得する
 	// (GET /workout-records)
 	ListWorkoutRecords(w http.ResponseWriter, r *http.Request, params ListWorkoutRecordsParams)
@@ -298,6 +301,20 @@ func (siw *ServerInterfaceWrapper) GetMyTrainingCalendar(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMyTrainingCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutMe operation middleware
+func (siw *ServerInterfaceWrapper) PutMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutMe(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -526,6 +543,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/training-calendar", wrapper.GetMyTrainingCalendar)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/me", wrapper.PutMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workout-records", wrapper.ListWorkoutRecords)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.DeleteWorkoutRecord)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.PutWorkoutRecord)
