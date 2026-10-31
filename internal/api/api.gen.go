@@ -163,22 +163,6 @@ type TrainingSession struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
-// User ユーザー
-type User struct {
-	// DisplayName 表示名。まだ決めていなければ null
-	//
-	// Example: 田中騎士団
-	DisplayName *string `json:"display_name"`
-
-	// Handle ほかのユーザーから見える ID（@ は付けない）。まだ決めていなければ null
-	//
-	// Example: tanakaKishidan
-	Handle *string `json:"handle"`
-
-	// Id サーバーが作ったユーザーの ID
-	Id openapi_types.UUID `json:"id"`
-}
-
 // WorkoutExercise トレーニング内の1種目（iOS の `WorkoutExercise`）
 type WorkoutExercise struct {
 	// Exercise 種目（iOS の `Exercise`）。記録には、記録したときの種目名と部位をそのまま保存する。

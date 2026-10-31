@@ -151,29 +151,18 @@ paths:
       operationId: putMe
       summary: ログイン中のユーザーを登録する（初回ログイン時）
       description: |
-        ID トークンのユーザーがまだ登録されていなければ登録し、登録済みならそのまま返す。
+        ID トークンのユーザーがまだ登録されていなければ登録し、登録済みなら何もしない。
         アプリはログインした直後に毎回呼んでよい。
 
         - 本文は送らない。「誰か」は ID トークンからサーバーが判断する
+        - レスポンスにも本文はない。登録したかどうかはステータスコード（201 / 204）で判断する
         - 同じユーザーで何度呼んでも、ユーザーは1人しか作られない（冪等）
         - display_name と handle は、登録した直後は null
       responses:
-        '200':
-          description: すでに登録されていた
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
         '201':
-          description: 新しく登録した
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-              example:
-                id: '7C9E6679-7425-40DE-944B-E07FC1F90AE7'
-                display_name: null
-                handle: null
+          description: 新しく登録した（本文なし）
+        '204':
+          description: すでに登録されていたので、何もしなかった（本文なし）
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':

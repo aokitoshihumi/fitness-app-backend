@@ -11,6 +11,11 @@ type UserRepository struct {
 	pool *pgxpool.Pool
 }
 
+// pool は小文字（パッケージの外から触れない）なので、外から作るための関数を用意する
+func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
+	return &UserRepository{pool: pool}
+}
+
 func (r *UserRepository) CreateIfNotExists(ctx context.Context, firebaseUID string) (created bool, err error) {
 	// 行を返さない SQL なので QueryRow ではなく Exec を使う
 	// tagには何行のデータが変更されたのかという情報が入る。後どんな操作だったのかも
