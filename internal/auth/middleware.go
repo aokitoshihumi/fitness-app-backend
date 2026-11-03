@@ -19,12 +19,13 @@ type ctxKey struct{}
 func Middleware(v TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			//ヘッダーからトークンを取り出す
 			idToken, ok := bearerToken(r.Header.Get("Authorization"))
 			if !ok || idToken == "" {
 				writeUnauthorized(w)
 				return
 			}
-
+			// トークンが本物かFirebaseに確認してもらう
 			uid, err := v.VerifyIDToken(r.Context(), idToken)
 			if err != nil {
 				log.Printf("ID トークンの検証に失敗しました: %v", err)

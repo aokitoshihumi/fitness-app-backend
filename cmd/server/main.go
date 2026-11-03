@@ -56,6 +56,9 @@ func run() error {
 	// requireAuth は http.Handler を返すので HandleFunc ではなく Handle で登録する
 	mux.Handle("PUT /api/v1/users/me", requireAuth(http.HandlerFunc(users.PutMe)))
 
+	workouts := handler.NewWorkoutsHandler(repository.NewWorkoutRepository(pool))
+	mux.Handle("PUT /api/v1/workout-records/{workoutId}", requireAuth(http.HandlerFunc(workouts.PutRecord)))
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           mux,
