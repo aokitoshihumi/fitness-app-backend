@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/aokitoshihumi/fitness-app-backend/internal/api"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/auth"
@@ -13,15 +14,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type WorkoutSaver interface {
+type WorkoutStore interface {
 	Put(ctx context.Context, firebaseUID string, rec api.WorkoutRecord) (created bool, err error)
+	List(ctx context.Context, firebaseUID string, from, to *time.Time) ([]api.WorkoutRecord, error)
 }
 
 type WorkoutsHandler struct {
-	workouts WorkoutSaver
+	workouts WorkoutStore
 }
 
-func NewWorkoutsHandler(workouts WorkoutSaver) *WorkoutsHandler {
+func NewWorkoutsHandler(workouts WorkoutStore) *WorkoutsHandler {
 	return &WorkoutsHandler{workouts: workouts}
 }
 
@@ -91,6 +93,43 @@ func (h *WorkoutsHandler) PutRecord(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(rec)
 }
 
+func (h *WorkoutsHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
+	uid, ok := auth.UIDFromContext(r.Context())
+	if !ok {
+		log.Println("GET /workout-records: contextにUIDがありません。auth.Middlewareを通していますか")
+		writeInternalError(w)
+		return
+	}
+
+	// ?from= と ?to= を読む
+	from, err := parseTimeQuery(r, "from")
+	if err != nil {
+		writeBadRequest(w)
+		return
+	}
+	to, err := parseTimeQuery(r, "to")
+	if err != nil {
+		writeBadRequest(w)
+		return
+	}
+
+	// DB から読む
+	records, err := h.workouts.List(r.Context(), uid, from, to)
+	if err != nil {
+		log.Printf("GET /workout-records: %v", err)
+		writeInternalError(w)
+		return
+	}
+
+	// 0件のときに null ではなく [] を返す
+	if records == nil {
+		records = []api.WorkoutRecord{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(api.WorkoutRecordList{WorkoutRecords: records})
+
+}
+
 // validateWorkoutRecord は openapi.yml に書いた決まりを確かめる。
 // DB の制約でも防げるものもあるが、ここで先に弾くとエラーの理由がわかりやすい
 func validateWorkoutRecord(pathID uuid.UUID, rec api.WorkoutRecord) error {
@@ -140,4 +179,18 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	body.Error.Code = code
 	body.Error.Message = message
 	json.NewEncoder(w).Encode(body)
+}
+
+// parseTimeQuery はクエリパラメータを日時として読む。
+// 無ければ nil（条件なし）、形がおかしければエラー
+func parseTimeQuery(r *http.Request, name string) (*time.Time, error) {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
