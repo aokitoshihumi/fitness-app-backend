@@ -232,3 +232,57 @@ func TestPutRecord_保存のエラーに合わせたステータスを返す(t *
 		})
 	}
 }
+
+func callDeleteRecords(workouts WorkoutStore, id string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	mux.Handle("DELETE /api/v1/workout-records/{workoutId}",
+		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(workouts).DeleteRecords)))
+
+	// DELETE は本文がないので nil を渡す
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/workout-records/"+id, nil)
+	req.Header.Set("Authorization", "Bearer any-token")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestDeleteRecords_成功なら204(t *testing.T) {
+	fake := &fakeWorkouts{}
+	rec := callDeleteRecords(fake, testWorkoutID)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	// 204 は「中身なし」なので、本文が空であることも確かめる
+	if rec.Body.Len() != 0 {
+		t.Errorf("204 なのに本文があります: %s", rec.Body.String())
+	}
+	if !fake.called {
+		t.Fatal("Delete が呼ばれていません")
+	}
+	// パスの ID がそのまま repository に渡っているか
+	if fake.gotID.String() != testWorkoutID {
+		t.Errorf("id = %s, want %s", fake.gotID, testWorkoutID)
+	}
+}
+
+func TestDeleteRecords_IDがUUIDでないと400(t *testing.T) {
+	fake := &fakeWorkouts{}
+	rec := callDeleteRecords(fake, "not-a-uuid")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	// DB まで行かずに止まっていること
+	if fake.called {
+		t.Error("ID がおかしいのに Delete が呼ばれました")
+	}
+}
+
+func TestDeleteRecords_DBエラーなら500(t *testing.T) {
+	rec := callDeleteRecords(&fakeWorkouts{err: errors.New("db down")}, testWorkoutID)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
