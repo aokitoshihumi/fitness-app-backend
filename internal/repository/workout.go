@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aokitoshihumi/fitness-app-backend/internal/api"
 	"github.com/google/uuid"
@@ -115,10 +116,92 @@ func (r *WorkoutRepository) Put(ctx context.Context, firebaseUID string, rec api
 	return created, nil
 }
 
+func (r *WorkoutRepository) List(ctx context.Context, firebaseUID string, from, to *time.Time) ([]api.WorkoutRecord, error) {
+
+	//（例）：rows
+	//   w-1105 | 11/5 19:00 | ベンチプレス | chest | 60kg x 10
+	//   w-1105 | 11/5 19:00 | ベンチプレス | chest | 65kg x 8
+	rows, err := r.pool.Query(ctx, `
+		SELECT w.id, w.started_at, w.ended_at,
+		       we.id, we.exercise_id, we.exercise_name, we.body_part,
+		       ws.id, ws.weight, ws.reps, ws.memo
+		FROM workouts w
+		JOIN users u	ON u.id = w.user_id
+		JOIN workout_exercises we ON we.workout_id = w.id
+		JOIN workout_sets ws ON ws.workout_exercise_id = we.id
+		WHERE u.firebase_uid = $1
+			AND ($2::timestamptz IS NULL OR w.started_at >= $2)
+			AND ($3::timestamptz IS NULL OR w.started_at < $3)
+		ORDER BY w.started_at DESC, w.id, we.position, ws.position`,
+		firebaseUID, from, to,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("記録の取得に失敗しました: %w", err)
+	}
+	defer rows.Close() // 処理が終わったら接続を返す
+
+	var records []api.WorkoutRecord
+	// rows.Next() は、クエリの結果を1行ずつ、届くのを待ちながら読み進める。終わりの合図が来るか、エラーが起きたら false になる。どちらだったかは rows.Err() で確かめる。
+	for rows.Next() {
+		var (
+			workoutID, workoutExerciseID, setID uuid.UUID
+			startedAt, endedAt                  time.Time
+			exerciseID, exerciseName, bodyPart  string
+			weight                              *float64
+			reps                                int
+			memo                                string
+		)
+		// Nextで待ってScanできる
+		if err := rows.Scan(
+			&workoutID, &startedAt, &endedAt,
+			&workoutExerciseID, &exerciseID, &exerciseName, &bodyPart,
+			&setID, &weight, &reps, &memo,
+		); err != nil {
+			return nil, fmt.Errorf("記録の読み取りに失敗しました: %w", err)
+		}
+
+		// 前の行と違うトレーニングなら、新しい記録を足す
+		// （ORDER BY で同じトレーニングの行は連続して届くので、最後の1件と比べるだけでよい）
+		if len(records) == 0 || records[len(records)-1].Id != workoutID {
+			records = append(records, api.WorkoutRecord{
+				Id:        workoutID,
+				StartedAt: startedAt,
+				EndedAt:   endedAt,
+			})
+		}
+		rec := &records[len(records)-1]
+		// 前の行と違う種目なら、新しい種目を足す
+		if len(rec.Exercises) == 0 || rec.Exercises[len(rec.Exercises)-1].Id != workoutExerciseID {
+			rec.Exercises = append(rec.Exercises, api.WorkoutExercise{
+				Id: workoutExerciseID,
+				Exercise: api.Exercise{
+					Id:       exerciseID,
+					Name:     exerciseName,
+					BodyPart: api.BodyPart(bodyPart),
+				},
+			})
+		}
+		ex := &rec.Exercises[len(rec.Exercises)-1]
+
+		// セットは1行に1つなので、毎回足す
+		ex.Sets = append(ex.Sets, api.WorkoutSet{
+			Id:     setID,
+			Weight: weight,
+			Reps:   reps,
+			Memo:   &memo,
+		})
+	}
+	// ループの途中で接続が切れた、などのエラーはここでわかる
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("記録の読み取りに失敗しました: %w", err)
+	}
+	return records, nil
+}
+
 // wrapInsertError は、利用者の入力が原因の DB エラーを ErrInvalidWorkout にまとめる
 func wrapInsertError(what string, err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	var pgErr *pgconn.PgError   // ポスグレのエラー
+	if errors.As(err, &pgErr) { // ポスグレエラーなら
 		switch pgErr.Code {
 		case "23503", // 外部キー違反：存在しない種目 ID や部位
 			"23505", // 重複：同じ記録の中で同じ UUID を2回使った、など

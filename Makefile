@@ -10,7 +10,7 @@ DATABASE_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_
 MIGRATE_VERSION := v4.20.1
 MIGRATE := go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION)
 
-.PHONY: db-up db-down migrate-up migrate-down migrate-version migrate-create run
+.PHONY: db-up db-down migrate-up migrate-down migrate-version migrate-create run token
 
 ## ローカルの PostgreSQL を起動する
 db-up:
@@ -38,3 +38,15 @@ migrate-create:
 
 run:
 	go run ./cmd/server
+
+## テスト用ユーザーで Firebase にログインし、ID トークン（1時間有効）だけを表示する
+## 使い方: export TOKEN=$(make -s token)
+## .env に FIREBASE_API_KEY / TEST_USER_EMAIL / TEST_USER_PASSWORD が必要
+token:
+	@res=$$(jq -n --arg email "$$TEST_USER_EMAIL" --arg password "$$TEST_USER_PASSWORD" \
+		'{email: $$email, password: $$password, returnSecureToken: true}' \
+	| curl -s -X POST \
+		"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$$FIREBASE_API_KEY" \
+		-H "Content-Type: application/json" -d @-); \
+	echo "$$res" | jq -er '.idToken // empty' 2>/dev/null \
+	|| { echo "トークンを取れませんでした: $$(echo "$$res" | jq -r '.error.message // .')" >&2; exit 1; }
