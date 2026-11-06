@@ -122,7 +122,9 @@ func (r *WorkoutRepository) List(ctx context.Context, firebaseUID string, from, 
 	//   w-1105 | 11/5 19:00 | ベンチプレス | chest | 60kg x 10
 	//   w-1105 | 11/5 19:00 | ベンチプレス | chest | 65kg x 8
 	rows, err := r.pool.Query(ctx, `
-		SELECT w.id, w.started_at, we.exercise_name, we.body_part
+		SELECT w.id, w.started_at, w.ended_at,
+		       we.id, we.exercise_id, we.exercise_name, we.body_part,
+		       ws.id, ws.weight, ws.reps, ws.memo
 		FROM workouts w
 		JOIN users u	ON u.id = w.user_id
 		JOIN workout_exercises we ON we.workout_id = w.id
@@ -188,13 +190,12 @@ func (r *WorkoutRepository) List(ctx context.Context, firebaseUID string, from, 
 			Reps:   reps,
 			Memo:   &memo,
 		})
-		// ループの途中で接続が切れた、などのエラーはここでわかる
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("記録の読み取りに失敗しました: %w", err)
-		}
+	}
+	// ループの途中で接続が切れた、などのエラーはここでわかる
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("記録の読み取りに失敗しました: %w", err)
 	}
 	return records, nil
-
 }
 
 // wrapInsertError は、利用者の入力が原因の DB エラーを ErrInvalidWorkout にまとめる
