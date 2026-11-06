@@ -198,6 +198,20 @@ func (r *WorkoutRepository) List(ctx context.Context, firebaseUID string, from, 
 	return records, nil
 }
 
+func (r *WorkoutRepository) Delete(ctx context.Context, firebaseUID string, id uuid.UUID) error {
+	// 結果返さないので
+	_, err := r.pool.Exec(ctx, `
+	 DELETE FROM workouts
+	 WHERE id = $1
+		AND user_id = (SELECT id FROM users WHERE firebase_uid = $2)`,
+		id, firebaseUID,
+	)
+	if err != nil {
+		return fmt.Errorf("記録の削除に失敗しました: %w", err)
+	}
+	return nil
+}
+
 // wrapInsertError は、利用者の入力が原因の DB エラーを ErrInvalidWorkout にまとめる
 func wrapInsertError(what string, err error) error {
 	var pgErr *pgconn.PgError   // ポスグレのエラー

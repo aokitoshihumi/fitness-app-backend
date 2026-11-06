@@ -17,6 +17,7 @@ import (
 type WorkoutStore interface {
 	Put(ctx context.Context, firebaseUID string, rec api.WorkoutRecord) (created bool, err error)
 	List(ctx context.Context, firebaseUID string, from, to *time.Time) ([]api.WorkoutRecord, error)
+	Delete(ctx context.Context, firebaseUID string, id uuid.UUID) error
 }
 
 type WorkoutsHandler struct {
@@ -128,6 +129,31 @@ func (h *WorkoutsHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(api.WorkoutRecordList{WorkoutRecords: records})
 
+}
+
+func (h *WorkoutsHandler) DeleteRecords(w http.ResponseWriter, r *http.Request) {
+	uid, ok := auth.UIDFromContext(r.Context())
+	if !ok {
+		log.Println("DELETE /workout-records: contextにUIDがありません。auth.Middlewareを通していますか")
+		writeInternalError(w)
+		return
+	}
+
+	// パスのWorkoutIDをUUIDとして読む
+	id, err := uuid.Parse(r.PathValue("workoutId"))
+	if err != nil {
+		writeBadRequest(w)
+		return
+	}
+
+	if err := h.workouts.Delete(r.Context(), uid, id); err != nil {
+		log.Printf("DELETE /workout-records: %v", err)
+		writeInternalError(w)
+		return
+	}
+
+	// 204 は「成功したけど返す中身はない」。本文は書かない
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // validateWorkoutRecord は openapi.yml に書いた決まりを確かめる。

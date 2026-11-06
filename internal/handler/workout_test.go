@@ -13,6 +13,7 @@ import (
 	"github.com/aokitoshihumi/fitness-app-backend/internal/api"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/auth"
 	"github.com/aokitoshihumi/fitness-app-backend/internal/repository"
+	"github.com/google/uuid"
 )
 
 // fakeWorkouts は DB の代わり。決めておいた値を返し、受け取った記録を覚えておく
@@ -26,6 +27,7 @@ type fakeWorkouts struct {
 	gotRec  api.WorkoutRecord
 	gotFrom *time.Time
 	gotTo   *time.Time
+	gotID   uuid.UUID
 }
 
 func (f *fakeWorkouts) Put(ctx context.Context, firebaseUID string, rec api.WorkoutRecord) (bool, error) {
@@ -40,6 +42,13 @@ func (f *fakeWorkouts) List(ctx context.Context, firebaseUID string, from, to *t
 	f.gotUID = firebaseUID
 	f.gotFrom, f.gotTo = from, to
 	return f.records, f.err
+}
+
+func (f *fakeWorkouts) Delete(ctx context.Context, firebaseUID string, id uuid.UUID) error {
+	f.called = true
+	f.gotUID = firebaseUID
+	f.gotID = id
+	return f.err
 }
 
 const testWorkoutID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
