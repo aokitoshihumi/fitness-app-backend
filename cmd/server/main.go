@@ -59,6 +59,7 @@ func run() error {
 	workouts := handler.NewWorkoutsHandler(repository.NewWorkoutRepository(pool))
 	mux.Handle("PUT /api/v1/workout-records/{workoutId}", requireAuth(http.HandlerFunc(workouts.PutRecord)))
 	mux.Handle("GET /api/v1/workout-records", requireAuth(http.HandlerFunc(workouts.ListRecords)))
+	mux.Handle("DELETE /api/v1/workout-records/{workoutId}", requireAuth(http.HandlerFunc(workouts.DeleteRecords)))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
