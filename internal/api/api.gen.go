@@ -87,82 +87,6 @@ type Exercise struct {
 	Name string `json:"name"`
 }
 
-// ExerciseRecord defines model for ExerciseRecord.
-type ExerciseRecord struct {
-	// BodyPart 部位コード。表示名（胸・背中など）への変換はフロントで行う。
-	// ※一覧は仮。最終的な分け方は別途決定する。
-	//
-	//
-	// Example: chest
-	BodyPart BodyPart `json:"body_part"`
-
-	// ExerciseId 種目マスタのID
-	//
-	// Example: 12
-	ExerciseId int64 `json:"exercise_id"`
-
-	// Name 種目名（種目マスタの値をそのまま返す）
-	//
-	// Example: ベンチプレス
-	Name string `json:"name"`
-
-	// Sets セットの記録。実施順。
-	Sets []ExerciseSet `json:"sets"`
-}
-
-// ExerciseSet defines model for ExerciseSet.
-type ExerciseSet struct {
-	// Reps 回数
-	//
-	// Example: 10
-	Reps int `json:"reps"`
-
-	// WeightKg 重量（kg）。自重種目は 0。
-	//
-	// Example: 60
-	WeightKg float32 `json:"weight_kg"`
-}
-
-// TrainingCalendarResponse defines model for TrainingCalendarResponse.
-type TrainingCalendarResponse struct {
-	// Days トレーニングをした日の一覧。日付の昇順。
-	Days []TrainingDay `json:"days"`
-
-	// Month 対象の月（リクエストの month と同じ値）
-	//
-	// Example: 2026-10
-	Month string `json:"month"`
-}
-
-// TrainingDay defines model for TrainingDay.
-type TrainingDay struct {
-	// BodyParts その日にトレーニングした部位の一覧（重複なし）。
-	// カレンダーのマス表示用の要約で、sessions 内の種目から算出する。
-	BodyParts []BodyPart `json:"body_parts"`
-
-	// Date ユーザーのタイムゾーン基準の日付
-	//
-	// Example: 2026-10-03
-	Date openapi_types.Date `json:"date"`
-
-	// Sessions その日のトレーニングセッション。開始時刻の昇順。
-	Sessions []TrainingSession `json:"sessions"`
-}
-
-// TrainingSession defines model for TrainingSession.
-type TrainingSession struct {
-	// Exercises 実施した種目。実施順。
-	Exercises []ExerciseRecord `json:"exercises"`
-
-	// SessionId Example: 881
-	SessionId int64 `json:"session_id"`
-
-	// StartedAt セッション開始日時（ISO 8601、タイムゾーンのオフセット付き）
-	//
-	// Example: 2026-10-03T10:15:00+09:00
-	StartedAt time.Time `json:"started_at"`
-}
-
 // WorkoutExercise トレーニング内の1種目（iOS の `WorkoutExercise`）
 type WorkoutExercise struct {
 	// Exercise 種目（iOS の `Exercise`）。記録には、記録したときの種目名と部位をそのまま保存する。
@@ -231,12 +155,6 @@ type InternalError = ErrorResponse
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = ErrorResponse
 
-// GetMyTrainingCalendarParams defines parameters for GetMyTrainingCalendar.
-type GetMyTrainingCalendarParams struct {
-	// Month 取得する月。YYYY-MM 形式で、月は必ず2桁（ゼロ埋め）。
-	Month string `form:"month" json:"month"`
-}
-
 // ListWorkoutRecordsParams defines parameters for ListWorkoutRecords.
 type ListWorkoutRecordsParams struct {
 	// From この日時以降に始めた記録だけを返す（この日時を含む）
@@ -251,9 +169,6 @@ type PutWorkoutRecordJSONRequestBody = WorkoutRecord
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// GetMyTrainingCalendar 自分の1ヶ月分のトレーニング履歴を取得する
-	// (GET /me/training-calendar)
-	GetMyTrainingCalendar(w http.ResponseWriter, r *http.Request, params GetMyTrainingCalendarParams)
 	// PutMe ログイン中のユーザーを登録する（初回ログイン時）
 	// (PUT /users/me)
 	PutMe(w http.ResponseWriter, r *http.Request)
@@ -276,39 +191,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// GetMyTrainingCalendar operation middleware
-func (siw *ServerInterfaceWrapper) GetMyTrainingCalendar(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetMyTrainingCalendarParams
-
-	// ------------- Required query parameter "month" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetMyTrainingCalendar(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // PutMe operation middleware
 func (siw *ServerInterfaceWrapper) PutMe(w http.ResponseWriter, r *http.Request) {
@@ -542,7 +424,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/training-calendar", wrapper.GetMyTrainingCalendar)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/me", wrapper.PutMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workout-records", wrapper.ListWorkoutRecords)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.DeleteWorkoutRecord)
