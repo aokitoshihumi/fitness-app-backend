@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aokitoshihumi/fitness-app-backend/internal/api"
@@ -222,6 +223,9 @@ func parseTimeQuery(r *http.Request, name string) (*time.Time, error) {
 	if s == "" {
 		return nil, nil
 	}
+	// クエリの中の「+」は空白として読まれてしまう（?from=...T00:00:00+09:00 → "...T00:00:00 09:00"）。
+	// RFC3339 の日時に空白は入らないので、空白を「+」に戻してから読む
+	s = strings.ReplaceAll(s, " ", "+")
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		return nil, err

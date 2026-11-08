@@ -127,6 +127,36 @@ func TestListRecords_fromとtoを渡す(t *testing.T) {
 	}
 }
 
+func TestListRecords_日時のいろいろな書き方を読める(t *testing.T) {
+	jst := time.FixedZone("", 9*60*60)
+	want := time.Date(2026, 10, 1, 0, 0, 0, 0, jst)
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		// iOS の URLQueryItem は + をエンコードしないので、そのまま届く
+		{"+をそのまま送る", "?from=2026-10-01T00:00:00+09:00"},
+		{"+を%2Bにして送る", "?from=2026-10-01T00:00:00%2B09:00"},
+		{"UTC(Z)で送る", "?from=2026-09-30T15:00:00Z"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workouts := &fakeWorkouts{}
+
+			rec := callListRecords(workouts, tt.query)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			if workouts.gotFrom == nil || !workouts.gotFrom.Equal(want) {
+				t.Errorf("from = %v, want %v", workouts.gotFrom, want)
+			}
+		})
+	}
+}
+
 func TestListRecords_日時の形がおかしいと400(t *testing.T) {
 	workouts := &fakeWorkouts{}
 
