@@ -66,9 +66,14 @@ const validBody = `{
 
 // 本物の mux（パスから {workoutId} を取り出す役）→ ミドルウェア → PutRecord の順に通す
 func callPutRecord(workouts WorkoutStore, id, body string) *httptest.ResponseRecorder {
+	return callPutRecordWithUsers(&fakeUsers{}, workouts, id, body)
+}
+
+// ユーザー作成の動きも確かめたいテスト用。fakeUsers を外から渡せる
+func callPutRecordWithUsers(users UserCreator, workouts WorkoutStore, id, body string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	mux.Handle("PUT /api/v1/workout-records/{workoutId}",
-		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(workouts).PutRecord)))
+		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(users, workouts).PutRecord)))
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/workout-records/"+id, strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer any-token")
@@ -80,7 +85,7 @@ func callPutRecord(workouts WorkoutStore, id, body string) *httptest.ResponseRec
 func callListRecords(workouts WorkoutStore, query string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/workout-records",
-		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(workouts).ListRecords)))
+		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(&fakeUsers{}, workouts).ListRecords)))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workout-records"+query, nil)
 	req.Header.Set("Authorization", "Bearer any-token")
@@ -233,10 +238,51 @@ func TestPutRecord_保存のエラーに合わせたステータスを返す(t *
 	}
 }
 
+func TestPutRecord_保存の前にユーザーを作る(t *testing.T) {
+	users := &fakeUsers{}
+	workouts := &fakeWorkouts{created: true}
+
+	rec := callPutRecordWithUsers(users, workouts, testWorkoutID, validBody)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if users.gotUID != "user-123" {
+		t.Errorf("CreateIfNotExists に渡った UID = %q, want %q", users.gotUID, "user-123")
+	}
+}
+
+func TestPutRecord_ユーザー作成に失敗したら500で保存しない(t *testing.T) {
+	users := &fakeUsers{err: errors.New("db is down")}
+	workouts := &fakeWorkouts{}
+
+	rec := callPutRecordWithUsers(users, workouts, testWorkoutID, validBody)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if workouts.called {
+		t.Error("ユーザーを作れなかったのに Put が呼ばれました")
+	}
+}
+
+func TestPutRecord_リクエストがおかしいとユーザーを作らない(t *testing.T) {
+	users := &fakeUsers{}
+
+	rec := callPutRecordWithUsers(users, &fakeWorkouts{}, testWorkoutID, `{`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if users.gotUID != "" {
+		t.Error("おかしなリクエストなのに CreateIfNotExists が呼ばれました")
+	}
+}
+
 func callDeleteRecords(workouts WorkoutStore, id string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	mux.Handle("DELETE /api/v1/workout-records/{workoutId}",
-		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(workouts).DeleteRecords)))
+		auth.Middleware(fakeVerifier{})(http.HandlerFunc(NewWorkoutsHandler(&fakeUsers{}, workouts).DeleteRecords)))
 
 	// DELETE は本文がないので nil を渡す
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/workout-records/"+id, nil)
