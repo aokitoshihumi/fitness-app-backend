@@ -62,6 +62,11 @@ func (h *WorkoutsHandler) PutRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 3.5 日時を秒までにそろえる（小数点以下の秒を切り捨てる）。
+	// iOS の .iso8601 は小数点付きの日時を読めないので、保存する前に落としておく
+	rec.StartedAt = rec.StartedAt.Truncate(time.Second)
+	rec.EndedAt = rec.EndedAt.Truncate(time.Second)
+
 	// ユーザがまだいなければ作る（フロントがput/meを呼ばなくても記録できるように）
 	if _, err := h.users.CreateIfNotExists(r.Context(), uid); err != nil {
 		log.Printf("PUT /workout-records: %v", err)
