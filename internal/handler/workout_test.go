@@ -362,3 +362,35 @@ func TestDeleteRecords_DBエラーなら500(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
+
+func TestPutRecord_日時を秒までに切り捨てる(t *testing.T) {
+	workouts := &fakeWorkouts{created: true}
+	// 小数点以下の秒がついた日時を送る
+	body := strings.Replace(validBody, "19:02:00+09:00", "19:02:00.123456+09:00", 1)
+	body = strings.Replace(body, "20:10:00+09:00", "20:10:00.999+09:00", 1)
+
+	rec := callPutRecord(workouts, testWorkoutID, body)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	// 1. 保存（Put）に渡された値が切り捨てられているか
+	jst := time.FixedZone("", 9*60*60)
+	wantStart := time.Date(2026, 10, 3, 19, 2, 0, 0, jst)
+	wantEnd := time.Date(2026, 10, 3, 20, 10, 0, 0, jst)
+	if !workouts.gotRec.StartedAt.Equal(wantStart) {
+		t.Errorf("started_at = %v, want %v", workouts.gotRec.StartedAt, wantStart)
+	}
+	if !workouts.gotRec.EndedAt.Equal(wantEnd) {
+		t.Errorf("ended_at = %v, want %v", workouts.gotRec.EndedAt, wantEnd)
+	}
+
+	// 2. 返す JSON にも小数点がないか
+	if !strings.Contains(rec.Body.String(), `"started_at":"2026-10-03T19:02:00+09:00"`) {
+		t.Errorf("started_at が秒までになっていません: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"ended_at":"2026-10-03T20:10:00+09:00"`) {
+		t.Errorf("ended_at が秒までになっていません: %s", rec.Body.String())
+	}
+}
