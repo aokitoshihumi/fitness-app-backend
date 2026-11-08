@@ -56,12 +56,12 @@ type ErrorResponse struct {
 	Error struct {
 		// Code プログラムで判定するためのエラーコード
 		//
-		// Example: invalid_month
+		// Example: invalid_request
 		Code string `json:"code"`
 
 		// Message 人が読むためのエラーメッセージ
 		//
-		// Example: month は YYYY-MM 形式で指定してください
+		// Example: リクエストの形式が正しくありません
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -85,6 +85,14 @@ type Exercise struct {
 	//
 	// Example: ベンチプレス
 	Name string `json:"name"`
+}
+
+// HealthResponse defines model for HealthResponse.
+type HealthResponse struct {
+	// Status 動いていれば ok
+	//
+	// Example: ok
+	Status string `json:"status"`
 }
 
 // WorkoutExercise トレーニング内の1種目（iOS の `WorkoutExercise`）
@@ -131,6 +139,9 @@ type WorkoutSet struct {
 	Id openapi_types.UUID `json:"id"`
 
 	// Memo セットごとのメモ（「補助あり」など）。省略したときは空文字として保存する。
+	// iOS アプリの `WorkoutSet` にはまだない。PUT は記録を丸ごと置き換えるので、
+	// memo を送らないアプリで編集して保存すると、memo は空文字に戻る。
+	//
 	//
 	// Example: 補助あり
 	Memo *string `json:"memo,omitempty"`
@@ -157,10 +168,13 @@ type Unauthorized = ErrorResponse
 
 // ListWorkoutRecordsParams defines parameters for ListWorkoutRecords.
 type ListWorkoutRecordsParams struct {
-	// From この日時以降に始めた記録だけを返す（この日時を含む）
+	// From この日時以降に始めた記録だけを返す（この日時を含む）。
+	// オフセットの `+` は `%2B` にエンコードする（`+09:00` → `%2B09:00`）。
+	// UTC（`Z`）で送ってもよい。
 	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
 
-	// To この日時より前に始めた記録だけを返す（この日時は含まない）
+	// To この日時より前に始めた記録だけを返す（この日時は含まない）。
+	// 書き方は from と同じ。
 	To *time.Time `form:"to,omitempty" json:"to,omitempty"`
 }
 
@@ -169,6 +183,9 @@ type PutWorkoutRecordJSONRequestBody = WorkoutRecord
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetHealth サーバーが動いているか確認する
+	// (GET /health)
+	GetHealth(w http.ResponseWriter, r *http.Request)
 	// PutMe ログイン中のユーザーを登録する（初回ログイン時）
 	// (PUT /users/me)
 	PutMe(w http.ResponseWriter, r *http.Request)
@@ -191,6 +208,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // PutMe operation middleware
 func (siw *ServerInterfaceWrapper) PutMe(w http.ResponseWriter, r *http.Request) {
@@ -424,6 +455,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/me", wrapper.PutMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workout-records", wrapper.ListWorkoutRecords)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/workout-records/{workoutId}", wrapper.DeleteWorkoutRecord)
