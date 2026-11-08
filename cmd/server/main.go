@@ -52,11 +52,12 @@ func run() error {
 	requireAuth := auth.Middleware(verifier)
 	mux.HandleFunc("GET /health", handler.Healthz)
 
-	users := handler.NewUsersHandler(repository.NewUserRepository(pool))
+	userRepo := repository.NewUserRepository(pool)
+	users := handler.NewUsersHandler(userRepo)
 	// requireAuth は http.Handler を返すので HandleFunc ではなく Handle で登録する
 	mux.Handle("PUT /api/v1/users/me", requireAuth(http.HandlerFunc(users.PutMe)))
 
-	workouts := handler.NewWorkoutsHandler(repository.NewWorkoutRepository(pool))
+	workouts := handler.NewWorkoutsHandler(userRepo, repository.NewWorkoutRepository(pool))
 	mux.Handle("PUT /api/v1/workout-records/{workoutId}", requireAuth(http.HandlerFunc(workouts.PutRecord)))
 	mux.Handle("GET /api/v1/workout-records", requireAuth(http.HandlerFunc(workouts.ListRecords)))
 	mux.Handle("DELETE /api/v1/workout-records/{workoutId}", requireAuth(http.HandlerFunc(workouts.DeleteRecords)))

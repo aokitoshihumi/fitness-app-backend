@@ -21,11 +21,12 @@ type WorkoutStore interface {
 }
 
 type WorkoutsHandler struct {
+	users    UserCreator
 	workouts WorkoutStore
 }
 
-func NewWorkoutsHandler(workouts WorkoutStore) *WorkoutsHandler {
-	return &WorkoutsHandler{workouts: workouts}
+func NewWorkoutsHandler(users UserCreator, workouts WorkoutStore) *WorkoutsHandler {
+	return &WorkoutsHandler{users: users, workouts: workouts}
 }
 
 // PUT /api/v1/workout-records/{workoutId} のハンドラ
@@ -57,6 +58,13 @@ func (h *WorkoutsHandler) PutRecord(w http.ResponseWriter, r *http.Request) {
 	if err := validateWorkoutRecord(pathID, rec); err != nil {
 		log.Printf("PUT /workout-records: %v", err)
 		writeBadRequest(w)
+		return
+	}
+
+	// ユーザがまだいなければ作る（フロントがput/meを呼ばなくても記録できるように）
+	if _, err := h.users.CreateIfNotExists(r.Context(), uid); err != nil {
+		log.Printf("PUT /workout-records: %v", err)
+		writeInternalError(w)
 		return
 	}
 
