@@ -1,0 +1,65 @@
+# プッシュや PR のたびに、GitHub のサーバー上でチェックとテストを自動で流す
+name: CI
+
+on:
+  # main に入ったとき
+  push:
+    branches: [main]
+  # PR を作ったとき・PR にプッシュしたとき
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # このジョブの間だけ、PostgreSQL を横で起動しておく（compose.yaml の代わり）
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fitness_test
+        ports:
+          - 5432:5432
+        # 起動しきるまで次のステップに進まない（compose.yaml の healthcheck と同じ）
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fitness_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # 下のすべてのステップで使う環境変数。Makefile の DATABASE_URL もこの値から組み立てられる
+    env:
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: fitness_test
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/fitness_test?sslmode=disable
+
+    steps:
+      # リポジトリのコードを取ってくる
+      - uses: actions/checkout@v6
+
+      # go.mod に書いてあるバージョンの Go を入れる
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      # openapi.yml を変えたのに api.gen.go を作り直し忘れていないか
+      - name: go generate の差分がないか
+        run: |
+          go generate ./...
+          git diff --exit-code
+
+      # 手元と同じく Makefile 経由で流す（golang-migrate のバージョンがそろう）
+      - name: マイグレーション
+        run: make migrate-up
+
+      # TEST_DATABASE_URL があるので、repository のテストもスキップされずに動く
+      - name: go test
+        run: go test -count=1 ./...
