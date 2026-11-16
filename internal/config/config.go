@@ -14,6 +14,7 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBSSLMode  string // DBとの通信を暗号化するか（disable / require など）
 
 	FirebaseProjectID string // FirebaseのプロジェクトのID
 }
@@ -31,6 +32,7 @@ func Load() (*Config, error) {
 		DBUser:     requireEnv("DB_USER", &missing),
 		DBPassword: requireEnv("DB_PASSWORD", &missing),
 		DBName:     requireEnv("DB_NAME", &missing),
+		DBSSLMode:  getEnv("DB_SSLMODE", "require"), // 書き忘れても安全なように、初期値は require
 
 		FirebaseProjectID: requireEnv("FIREBASE_PROJECT_ID", &missing),
 	}

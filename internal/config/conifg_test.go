@@ -13,6 +13,7 @@ func TestLoad_必須がそろっていれば読み込める(t *testing.T) {
 	t.Setenv("PORT", "")
 	t.Setenv("DB_HOST", "")
 	t.Setenv("DB_PORT", "")
+	t.Setenv("DB_SSLMODE", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -30,6 +31,9 @@ func TestLoad_必須がそろっていれば読み込める(t *testing.T) {
 	}
 	if cfg.FirebaseProjectID != "kintore-dev" {
 		t.Errorf("FirebaseProjectID = %q, want %q", cfg.FirebaseProjectID, "kintore-dev")
+	}
+	if cfg.DBSSLMode != "require" {
+		t.Errorf("DBSSLMode = %q, want %q（デフォルト値）", cfg.DBSSLMode, "require")
 	}
 }
 

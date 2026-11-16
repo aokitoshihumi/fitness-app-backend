@@ -4,7 +4,10 @@ export
 
 DB_HOST ?= localhost
 DB_PORT ?= 5432
-DATABASE_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
+# 初期値は暗号化あり（本番の RDS 向け）。ローカルは .env に DB_SSLMODE=disable を書く
+# .env の値を上書きするときは make の引数で渡す（例: make migrate-up DB_SSLMODE=require）
+DB_SSLMODE ?= require
+DATABASE_URL := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)
 
 # テスト用の DB。開発用のデータを消さないように、同じ PostgreSQL の中に別の DB を作る
 TEST_DB_NAME ?= $(DB_NAME)_test

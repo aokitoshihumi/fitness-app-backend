@@ -48,6 +48,7 @@ Hono + Cloudflare Workers で書いていた版は、タグ `ts-final` に残っ
 | `DB_USER`     | ✓    |             | DBのユーザー名                                         |
 | `DB_PASSWORD` | ✓    |             | DBのパスワード                                         |
 | `DB_NAME`     | ✓    |             | DB名                                                   |
+| `DB_SSLMODE`  |      | `require`   | DBとの通信を暗号化するか。ローカルでは `disable`       |
 
 ローカルでは `.env` に書きます。本番（Cloud Run）では Cloud Run の環境変数に設定し、
 `DB_PASSWORD` は Secret Manager から渡します。
