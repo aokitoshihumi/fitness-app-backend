@@ -37,3 +37,4 @@ docs/
 *.tfstate
 *.tfstate.*
 *.tfvars
+backend.hcl

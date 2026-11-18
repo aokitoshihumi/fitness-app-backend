@@ -10,4 +10,12 @@ terraform {
       version = "~> 6.0" # 6.x に固定
     }
   }
+
+  # state の置き場所（bucket は backend.hcl から渡す）
+  backend "s3" {
+    key          = "prod/terraform.tfstate" # バケット内のファイル名
+    region       = "ap-northeast-1"
+    encrypt      = true
+    use_lockfile = true # 同時に apply しないためのロック
+  }
 }
