@@ -1,0 +1,3 @@
+# backend.hcl にコピーして使う（backend.hcl は gitignore 済み）
+# 値は infra/bootstrap で terraform output bucket_name
+bucket = "fitness-app-tfstate-<アカウントID>"
