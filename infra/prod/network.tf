@@ -90,7 +90,7 @@ resource "aws_route_table_association" "public_1c" {
   route_table_id = aws_route_table.public.id
 }
 
-# プライベート用ルートテーブル（看板）：外への道は T5 で NAT 向けを足す
+# プライベート用ルートテーブル（看板）
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
