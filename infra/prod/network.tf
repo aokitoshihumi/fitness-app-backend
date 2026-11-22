@@ -141,12 +141,12 @@ resource "aws_default_network_acl" "default" {
 
   # インバウンド（入ってくるルール）
   ingress {
-    rule_no    = 100 # 番号が小さい方から評価される
-    protocol   = "-1" # 全プロトコル（TCPもUDPもICMPも）
-    action     = "allow" #許可
+    rule_no    = 100         # 番号が小さい方から評価される
+    protocol   = "-1"        # 全プロトコル（TCPもUDPもICMPも）
+    action     = "allow"     #許可
     cidr_block = "0.0.0.0/0" # 相手のIPの範囲
-    from_port  = 0 # ポート範囲の始まり
-    to_port    = 0 # ポート範囲の終わり(protcol=-1なら0にするなぜなら使われないから）
+    from_port  = 0           # ポート範囲の始まり
+    to_port    = 0           # ポート範囲の終わり(protocol=-1なら0にするなぜなら使われないから）
   }
 
   egress {
