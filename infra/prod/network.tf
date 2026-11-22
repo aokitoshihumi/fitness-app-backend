@@ -90,7 +90,7 @@ resource "aws_route_table_association" "public_1c" {
   route_table_id = aws_route_table.public.id
 }
 
-# プライベート用ルートテーブル（看板）
+# プライベート用ルートテーブル（看板）。外向きのルートは T5 で NAT 向けを足す
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
@@ -117,5 +117,48 @@ resource "aws_default_security_group" "default" {
 
   tags = {
     Name = "fitness-app-default-sg-unused"
+  }
+}
+
+# メインルートテーブルを空にする（紐付け忘れたサブネットを外に出さない）
+resource "aws_default_route_table" "default" {
+  default_route_table_id = aws_vpc.main.default_route_table_id
+
+  tags = {
+    Name = "fitness-app-default-rt-unused"
+  }
+}
+
+# デフォルト NACL を引き取る（中身は全部許可のまま。絞るのは SG で）
+resource "aws_default_network_acl" "default" {
+  default_network_acl_id = aws_vpc.main.default_network_acl_id
+  subnet_ids = [
+    aws_subnet.public_1a.id,
+    aws_subnet.public_1c.id,
+    aws_subnet.private_1a.id,
+    aws_subnet.private_1c.id,
+  ]
+
+  # インバウンド（入ってくるルール）
+  ingress {
+    rule_no    = 100 # 番号が小さい方から評価される
+    protocol   = "-1" # 全プロトコル（TCPもUDPもICMPも）
+    action     = "allow" #許可
+    cidr_block = "0.0.0.0/0" # 相手のIPの範囲
+    from_port  = 0 # ポート範囲の始まり
+    to_port    = 0 # ポート範囲の終わり(protcol=-1なら0にするなぜなら使われないから）
+  }
+
+  egress {
+    rule_no    = 100
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = {
+    Name = "fitness-app-default-nacl"
   }
 }
