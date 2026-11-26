@@ -6,8 +6,14 @@ terraform {
   # AWS と話すための部品（プロバイダー）
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0" # 6.x に固定
+      source  = "hashicorp/aws" # AWSのリソースを作る
+      version = "~> 6.0"        # 6.x に固定
+    }
+
+    # PWを作るための部品
+    random = {
+      source  = "hashicorp/random" # ランダムな値を作る（DBように）
+      version = "~> 3.0"
     }
   }
 
@@ -18,4 +24,6 @@ terraform {
     encrypt      = true
     use_lockfile = true # 同時に apply しないためのロック
   }
+
+
 }

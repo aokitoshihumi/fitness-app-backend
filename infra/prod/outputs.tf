@@ -22,3 +22,15 @@ output "nat_autoscaling_group_arn" {
   description = "NAT インスタンスを管理する Auto Scaling グループの ARN"
   value       = module.fck_nat.autoscaling_group_arn
 }
+
+output "db_address" {
+  description = "RDSの接続先（ホスト名）"
+  value       = aws_db_instance.main.address
+
+
+}
+output "db_password" {
+  description = "DB のパスワード（terraform output -raw db_password で見る）"
+  value       = random_password.db.result
+  sensitive   = true
+}
