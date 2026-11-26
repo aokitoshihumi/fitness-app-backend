@@ -7,7 +7,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws" # AWSのリソースを作る
-      version = "~> 6.0" # 6.x に固定
+      version = "~> 6.0"        # 6.x に固定
     }
 
     # PWを作るための部品
